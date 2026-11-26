@@ -377,16 +377,16 @@ gespeichertes Projekt, Zurücksetzen). Jetzt:
 | — | React-18→19, TS-5.6→7, Zustand 4→5, ESLint 9→10, Playwright-Major | bewusst nicht jetzt: Nutzen klein, Risiko bzw. Verifikation (E2E) hier nicht vollständig möglich |
 | — | GitHub Pages kann von diesem Agenten nicht aktiviert werden (POST /pages → 403) | Repo-Admin: Settings → Pages → Source: GitHub Actions |
 
-### Nicht ausgeführt in dieser Runde
+### E2E: lokal nicht lauffähig, in CI grün
 
-Playwright-E2E **konnte in dieser Umgebung nicht ausgeführt werden**: die in
+Playwright-E2E konnte **in dieser Sandbox nicht ausgeführt werden**: die in
 `~/.cache/ms-playwright` abgelegten Browser-Binaries sind nicht persistent
-zwischen Sessions und der Download ist in diesem Sandbox durch die
-Netzwerk-Allowlist blockiert (das CDN für
-Browser-Binaries ist nicht in der Netzwerk-Allowlist; npm/GitHub erlaubt). `npx playwright install chromium` schlägt mit Code 1 fehl. Die E2E-
-Suite (30 Tests inkl. 3 neuer Schutz-Tests) läuft auf jeder Pull-Request-CI
-(Job `e2e`) bzw. lokal mit `npm run e2e`. Bis dort grün: die UI-Änderungen sind
-durch Typecheck/Lint/Build/Unit abgesichert, aber **visuell unverifiziert**.
+zwischen Sessions und der Download ist durch die Netzwerk-Allowlist blockiert
+(das CDN für Browser-Binaries ist nicht in der Allowlist; npm/GitHub erlaubt).
+Dafür läuft die Suite jetzt **in CI** (Job `e2e`, Chromium mit Deps):
+Run 45902903525 → beide Jobs grün, darunter **Abnahmetests 55 s** — die 30
+Tests inkl. der 3 neuen Schutz-vor-Datenverlust-Tests sind damit visuell
+(verhalten) verifiziert, nicht nur Typecheck/Build.
 
 ### Verifizierte Endstände (diese Runde)
 
