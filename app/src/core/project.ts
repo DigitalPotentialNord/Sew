@@ -110,9 +110,19 @@ export function migrate(raw: unknown): unknown {
 
 // ─── IDs ─────────────────────────────────────────────────────────────────────
 let counter = 0;
+/**
+ * Prozess-lokal eindeutige IDs. `Date.now()` allein reicht nicht: zwei Tabs, die
+ * in derselben Millisekunde eine ID fordern, bekämen denselben Wert. Deshalb
+ * Zufall aus `crypto`; der Zähler bleibt als Tiebreaker im selben Prozess.
+ * Instances tragen lokale IDs ohne Sicherheitsrelevanz.
+ */
 export function newId(prefix: string): string {
   counter += 1;
-  return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}`;
+  const rand =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}_${rand}${counter.toString(36)}`;
 }
 
 export function nowIso(): string {
@@ -124,7 +134,9 @@ export function blankProject(name = 'Neues Etui'): Project {
   const ts = '2026-01-01T00:00:00.000Z';
   return {
     schemaVersion: SCHEMA_VERSION,
-    id: 'p_new',
+    // Frische ID, sonst überschreiben zwei leere Projekte in der Bibliothek
+    // einander (saveToLibrary ersetzt per ID).
+    id: newId('p'),
     name,
     createdAt: ts,
     updatedAt: ts,
@@ -263,15 +275,29 @@ export function loadLibrary(): StoredProject[] {
   return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function saveToLibrary(p: Project): void {
-  const list = loadLibrary().filter((s) => s.id !== p.id);
-  list.unshift({ id: p.id, name: p.name, updatedAt: p.updatedAt, project: p });
-  localStorage.setItem(STORE_KEY, JSON.stringify(list.slice(0, 30)));
+/**
+ * Schreibzugriff kann scheitern (Quota, privater Modus, deaktiviertes Storage).
+ * Dann bleibt die App bedienbar und meldet ehrlich „nicht gespeichert“, statt
+ * mit einer Exception im Klick-Handler abzustürzen.
+ */
+function safeWrite(fn: () => void): boolean {
+  try {
+    fn();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function deleteFromLibrary(id: string): void {
+export function saveToLibrary(p: Project): boolean {
+  const list = loadLibrary().filter((s) => s.id !== p.id);
+  list.unshift({ id: p.id, name: p.name, updatedAt: p.updatedAt, project: p });
+  return safeWrite(() => localStorage.setItem(STORE_KEY, JSON.stringify(list.slice(0, 30))));
+}
+
+export function deleteFromLibrary(id: string): boolean {
   const list = loadLibrary().filter((s) => s.id !== id);
-  localStorage.setItem(STORE_KEY, JSON.stringify(list));
+  return safeWrite(() => localStorage.setItem(STORE_KEY, JSON.stringify(list)));
 }
 
 export function loadCurrent(): Project | null {
@@ -281,12 +307,12 @@ export function loadCurrent(): Project | null {
   return parsed.ok ? parsed.project : null;
 }
 
-export function saveCurrent(p: Project): void {
-  localStorage.setItem(CURRENT_KEY, JSON.stringify(p));
+export function saveCurrent(p: Project): boolean {
+  return safeWrite(() => localStorage.setItem(CURRENT_KEY, JSON.stringify(p)));
 }
 
 export function clearCurrent(): void {
-  localStorage.removeItem(CURRENT_KEY);
+  safeWrite(() => localStorage.removeItem(CURRENT_KEY));
 }
 
 // ─── Vorlagen ────────────────────────────────────────────────────────────────

@@ -555,6 +555,8 @@ export const de = {
 
   // ── Toast / Feedback ───────────────────────────────────────────────────────
   'toast.saved': 'Projekt gespeichert',
+  'toast.projectLoaded': 'Projekt geladen',
+  'toast.saveFailed': 'Speichern fehlgeschlagen — Browser-Speicher voll oder blockiert',
   'toast.loaded': 'Vorlage geladen',
   'toast.imported': 'Projekt importiert',
   'toast.importError': 'Datei konnte nicht gelesen werden',
@@ -564,6 +566,10 @@ export const de = {
   'toast.blocked': 'Export gesperrt — {n} Fehler beheben',
   'toast.copied': 'In die Zwischenablage kopiert',
   'toast.reset': 'Projekt zurückgesetzt',
+  'toast.fixNoEffect': 'Dieser Fix ändert am aktuellen Zustand nichts',
+  'toast.svgSaved': 'SVG heruntergeladen',
+  'toast.projectExported': 'Projekt exportiert',
+  'toast.popupBlocked': 'Popup blockiert — HTML-Datei heruntergeladen',
 
   // ── Mobile ─────────────────────────────────────────────────────────────────
   'mobile.lib': 'Bibliothek',

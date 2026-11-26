@@ -6,6 +6,7 @@
 import { bbox, hashString, mm, rect, snapTo, type Mm, type Rect } from './geometry';
 import { moduleDef } from './modules';
 import { LIMITS, PRACTICE } from './practice';
+import { findingKey } from './fixes';
 import type {
   ExtraMaterial,
   Finding,
@@ -774,7 +775,7 @@ function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOp
         moduleId: m.id,
         titleKey: op.titleKey,
         values: { ...op.values, modul: def.nameKey, nr: i + 1 },
-        deps: op.kind === 'mark' || op.kind === 'fuse' || op.kind === 'press' ? [cutId] : [cutId],
+        deps: [cutId],
         seq: seq++,
       });
       moduleOps.push({ id, kind: op.kind });
@@ -866,7 +867,7 @@ export function construct(p: Project): Construction {
 
   const dedup = new Map<string, Finding>();
   for (const f of findings) {
-    const k = `${f.ruleId}|${f.subject.kind}|${'id' in f.subject ? f.subject.id : ''}|${JSON.stringify(f.values)}`;
+    const k = findingKey(f); // identische Formel wie in fixes.ts — eine Stelle
     if (!dedup.has(k)) dedup.set(k, f);
   }
   const sorted = [...dedup.values()].sort(

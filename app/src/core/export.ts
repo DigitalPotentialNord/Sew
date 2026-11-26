@@ -22,7 +22,8 @@ function pieceGroup(piece: ComputedPiece, x: number, y: number): string {
   const net: Rect = { x: asMm(x + nz), y: asMm(y + nz), w: piece.netW, h: piece.netH };
   const grainX = x + piece.w / 2;
   const parts: string[] = [];
-  parts.push(`<g id="piece-${piece.id}" data-piece="${piece.id}" data-count="${piece.count}" data-material="${piece.material}">`);
+  const label = escapeHtml(piece.id);
+  parts.push(`<g id="piece-${label}" data-piece="${label}" data-count="${piece.count}" data-material="${piece.material}">`);
   parts.push(`<path d="${roundedRectPath(r, piece.radius)}" class="cut" ${STYLE.cut}/>`);
   parts.push(`<path d="${roundedRectPath(net, 0)}" class="sew" ${STYLE.sew}/>`);
   parts.push(`<path d="M${grainX},${y + 8} V${y + piece.h - 8}" class="grain" ${STYLE.grain}/>`);
@@ -32,7 +33,7 @@ function pieceGroup(piece: ComputedPiece, x: number, y: number): string {
     parts.push(`<path d="M${x + 2},${fy} H${x + piece.w - 2}" class="fold" ${STYLE.fold}/>`);
   }
   parts.push(
-    `<text x="${x + piece.w / 2}" y="${y + piece.h / 2}" class="label" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="5" fill="#111">${piece.id} · ${piece.count}× · ${piece.w}×${piece.h} mm</text>`,
+    `<text x="${x + piece.w / 2}" y="${y + piece.h / 2}" class="label" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="5" fill="#111">${escapeHtml(piece.id)} · ${piece.count}× · ${piece.w}×${piece.h} mm</text>`,
   );
   parts.push('</g>');
   return parts.join('\n    ');

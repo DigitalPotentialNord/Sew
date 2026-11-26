@@ -15,7 +15,7 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
 
   const exportSvg = (): void => {
     downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(c));
-    toast('SVG heruntergeladen', 'ok');
+    toast(t('toast.svgSaved'), 'ok');
   };
 
 
@@ -157,7 +157,7 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
             icon="download"
             onClick={() => {
               downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify({ format: 'organizer-studio/project', schemaVersion: 2, exportedAt: new Date().toISOString(), appVersion: '0.1.0', project }, null, 2));
-              toast('Projekt exportiert', 'ok');
+              toast(t('toast.projectExported'), 'ok');
             }}
           >
             {t('top.exportJson')}

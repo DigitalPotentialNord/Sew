@@ -132,7 +132,7 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
         <Button icon="save" onClick={save} title={t('top.save')} />
         <Button icon="upload" onClick={() => fileRef.current?.click()} title={t('top.import')} />
         <Button icon="download" onClick={() => { const data = useStore.getState().exportProject(); downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify(data, null, 2)); toast(t('toast.exported'), 'ok'); }} title={t('top.exportProject')} />
-        <Button icon="image" onClick={() => { downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(useStore.getState().construction)); toast('SVG heruntergeladen', 'ok'); }} disabled={errors > 0} title={t('top.exportSvg')} />
+        <Button icon="image" onClick={() => { downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(useStore.getState().construction)); toast(t('toast.svgSaved'), 'ok'); }} disabled={errors > 0} title={t('top.exportSvg')} />
         <input
           ref={fileRef}
           type="file"
@@ -486,7 +486,7 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
   if (!w) {
     // Fallback: Datei herunterladen
     downloadText(fileName(project.name, 'anleitung', 'html'), 'text/html', html);
-    state.toast('Popup blockiert — HTML-Datei heruntergeladen', 'info');
+    state.toast(t('toast.popupBlocked'), 'info');
     return;
   }
   w.document.open();

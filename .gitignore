@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build-Artefakte
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Test- und Coverage-Artefakte
+test-results/
+playwright-report/
+coverage/
+
+# Lokale Umgebung / Secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Arena/Runtime-Reste (früher irrtümlich eingecheckt)
+last-run.json
+download

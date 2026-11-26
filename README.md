@@ -1,90 +1,234 @@
-# Research: Interaktiver Organizer-Designer für Nähprojekte
+# Organizer Studio
 
-**Phase 1 – Marktforschung & Produktchance**
-Stand: 26. November 2026 · Status: abgeschlossen, Entscheidungsvorlage fertig
+[![CI](https://github.com/DigitalPotentialNord/Sew/actions/workflows/ci.yml/badge.svg)](https://github.com/DigitalPotentialNord/Sew/actions/workflows/ci.yml)
+[![Pages](https://github.com/DigitalPotentialNord/Sew/actions/workflows/pages.yml/badge.svg)](https://github.com/DigitalPotentialNord/Sew/actions/workflows/pages.yml)
 
----
+**Live-Test (GitHub Pages):** <https://digitalpotentialnord.github.io/Sew/>
 
-## Worum es geht
+**Ein browserbasiertes Werkzeug, das aus einer Liste „was nimmst du mit“ ein
+maßhaltiges Näh-Schnittmuster macht — mit Materialliste, Zuschnittplan und
+Nähanleitung, ohne Konto, ohne CAD.**
 
-Geprüft wurde die Produktidee einer Webanwendung, in der Nutzer das **Innenleben** von
-Federmäppchen, Schmuckrollen, Make-up-Organizern, Stricknadel-Etuis und ähnlichen
-Taschen-Projekten **frei konstruieren** (Module platzieren, skalieren, konfigurieren) und
-daraus automatisch **Schnittmuster, Materialliste, Zuschnittliste und Nähanleitung**
-erhalten.
+Ein Etui für Stricknadeln, Schmuck oder Make-up entsteht nicht am Bildschirm,
+sondern an der Nähmaschine. Wer es selbst näht, braucht drei Dinge: ein
+Schnittmuster, das in Millimetern stimmt, eine Materialliste, die zum Einkaufen
+reicht, und eine Reihenfolge, in der man nähen kann. Genau diese drei Dinge
+erzeugt dieses Programm aus einer Beschreibung wie „6 Nadelkanäle à 4–8 mm,
+eine Häkelreihe, ein Scherenfach“.
 
-Die zentrale Forschungsfrage:
+```
+Project (Absicht)              construct()                Construction (Ausgabe)
+─────────────────              ───────────                ──────────────────────
+Grundfläche, Bund      ───►    layout()        ───►   Module platziert + Findings
+Zeilen (Reihen)                buildPieces()   ───►   Schnittteile mit Nahtzugabe
+Module + Parameter             buildMaterials()──►   Mengen + Zuschnittplan
+Nahtzugabe, Stoffbreite        buildOperations()──►   Nähschritte, sortiert
+                               projectHash     ───►   8 Hex-Zeichen (Golden-Werte)
+                                          │
+                                          ▼
+                       SVG · A4-Kacheln (PDF) · Druck-HTML · JSON
+```
 
-> Gibt es bereits einen echten CAD-ähnlichen Organizer-Designer, bei dem Nutzer das
-> Innenleben eines Mäppchens frei konstruieren können und anschließend ein vollständiges,
-> nähbares Schnittmuster erhalten?
-
-## Kurzantwort
-
-**Nein – diese Lücke existiert wirklich. Aber sie ist sehr viel schmaler, als die
-Produktidee unterstellt.**
-
-Alle Einzelteile existieren bereits und sind überwiegend **kostenlos**:
-
-| Baustein | Status quo | Anbieter |
-|---|---|---|
-| Parametrische Maße → fertiges Organizer-Schnittmuster mit Nahtzugabe, Zuschnittliste, Materialschätzung, Nähanleitung | **existiert, gratis, ohne Konto** | Print + Cut + Sew, Katagami, Nastix, Atomm |
-| Innenleben-Parameter (Elastikreihen, Loop-Breite, Steckfach-Tiefe, Fächeraufteilung, Reißverschlusslänge) | **existiert, gratis** | Print + Cut + Sew (Zip-Around Organiser, Roll-Up Case, Tool Belt, Bag Organiser Insert) |
-| 3D-Vorschau + Parametrik + Export | **existiert, gratis** | Atomm Sewing Bag Pattern Generator |
-| Freie 2D-Konstruktion mit Abhängigkeiten, Nahtzugaben, Stoffverbrauch, Packing | **existiert, Open Source** | OpenSloper, Seamly2D, Valentina, Sewist CAD |
-| Modulbaukästen für Taschen-Innenleben als Produkt | **existiert, kommerziell** | shesmile „Innenleben 1–3" |
-
-Was **nachweislich fehlt**, ist die **Kombination**: ein *objektbasierter, frei
-positionierbarer* Innenraum-Editor, der Constraint-Logik (Kollision, Überlappung, Tiefe,
-Nahtzugabe) beherrscht und daraus eine *technisch nachvollziehbare* Nähkonstruktion ableitet.
-
-Das ist ein **echtes, aber enges Feature-Delta** – kein neuer Markt. Und es liegt in einem
-Segment, in dem (a) die zahlungskräftigste Vergleichsgruppe „0 €" kostet, (b) die
-Zahlungsbereitschaft für digitale Nähprodukte strukturell bei 3–8 € liegt und (c) das
-relevante Suchvolumen um **ein bis drei Größenordnungen unter** dem der Kernbegriffe des
-Segments liegt.
-
-**Empfehlung: Bedingtes Go** – nicht als „Organizer-CAD", sondern als schlanker
-*„Innenleben-Konfigurator"* mit einem einzigen, sehr engen Startsegment und einem
-Bezahlmodell, das gegen „kostenlos" bestehen kann. Details und Abbruchkriterien in
-[`opportunity-analysis.md`](opportunity-analysis.md).
+Das Projekt ist bewusst **eine Absicht, kein Ergebnis**: gespeichert werden nur
+Grundfläche, Zeilen, Module und Parameter. Alle Maße, Teile, Mengen und
+Nähschritte werden bei jeder Änderung neu berechnet. Ein Projekt, das man
+öffnet, ist deshalb immer konsistent — es gibt keinen Zustand, in dem Liste und
+Schnittmuster auseinanderlaufen können.
 
 ---
 
-## Dokumente
+## 1. In 60 Sekunden lauffähig
 
-| Datei | Inhalt |
-|---|---|
-| [`market-landscape.md`](market-landscape.md) | Marktgrößen, Segmente, Wertschöpfungskette, Zahlungsstrukturen, Trends DE/EU/USA |
-| [`competitors.md`](competitors.md) | Vollständige Wettbewerberanalyse: 30+ Anbieter, Vergleichsmatrix, 10 kritische Prüffragen, Beweislage |
-| [`customer-research.md`](customer-research.md) | 8 Zielgruppen, 8 Personas, 5 Kernprobleme, Nutzungssituationen, Zahlungsbereitschaft |
-| [`keyword-research.md`](keyword-research.md) | Nachfrageindikatoren DE/EU/USA, Autocomplete-Rohdaten, Suchintention, Angebot-vs-Nachfrage |
-| [`opportunity-analysis.md`](opportunity-analysis.md) | 3 Positionierungen, 18 Differenzierungsmöglichkeiten, Chancen/Risiken, MVP, Go/No-Go |
-| [`business-model.md`](business-model.md) | 8 Erlösmodelle, Szenarien (Modellrechnung, klar als Annahme markiert), Unit Economics |
+```bash
+cd app
+npm install
+npm run dev          # → http://localhost:5173
+```
 
-## Arbeitsweise & Beweisregeln
+Kein Backend, kein Konto, keine Datenbank. Der Editor läuft vollständig im
+Browser; Projekte liegen im `localStorage`, Exporte sind Dateien.
 
-Jede wesentliche Aussage trägt eine von vier Markierungen:
+| Befehl | Zweck |
+| --- | --- |
+| `npm run dev` | Dev-Server auf `0.0.0.0:5173` |
+| `npm run build` | Typen prüfen + Produktionsbuild nach `dist/` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint 9 (flat config) |
+| `npm test` | 189 Unit-Tests (Vitest, `src/_tests/`) |
+| `npm run e2e` | 27 Abnahmetests (Playwright, `tests/`) |
+| `npm run check` | typecheck + lint + test — **vor jedem Commit** |
 
-| Kürzel | Bedeutung |
-|---|---|
-| **[F]** | **Fakt** – auf einer benannten Quelle direkt nachlesbar (Preis, Funktionsliste, Zitat). Quelle verlinkt. |
-| **[B]** | **Beobachtet** – von mir am 26.11.2026 tatsächlich auf der Anbieterseite geprüft (Funktion, Preis, Formulierung). |
-| **[A]** | **Abgeleitet** – Schlussfolgerung aus mehreren Fakten; die Ableitung ist im Text nachvollziehbar. |
-| **[H]** | **Hypothese** – begründete Annahme, **nicht** belegt. Muss vor Investitionsentscheidungen validiert werden. |
+Voraussetzungen: Node ≥ 20, kein weiteres Tooling. Für die E2E-Tests einmalig
+`npx playwright install chromium`.
 
-**Bewusst nicht enthalten:** erfundene Suchvolumina, erfundene Umsatzzahlen, erfundene
-Interviewzitate. Wo Zahlen fehlen, steht das da. Wo ich rechne, steht die Rechnung.
+**Schnellster Einstieg für Menschen:** `npm run dev`, dann Tab „Projekt“ →
+Vorlage „Stricknadel-Organizer“. Drei Vorlagen sind darauf getestet, dass sie
+**0 Fehler und 0 Warnungen** erzeugen; jede andere Konstellation ist ein echter
+Testfall.
 
-**Bekannte Grenzen dieser Recherche (ehrlich):**
+---
 
-1. Kein Zugriff auf bezahlte Keyword-Tools (Ahrefs, Semrush, eRank, Marmalead). Absolute
-   Suchvolumina sind deshalb **nur** dort angegeben, wo eine Quelle sie nennt – sonst wird
-   ausschließlich mit Autocomplete-Rangfolgen und relativen Aussagen gearbeitet.
-2. Keine Nutzerbefragung, kein Nutzertest. Personas sind aus beobachteten Artikulationen in
-   Communities und aus Produktangeboten **abgeleitet**, nicht interviewt.
-3. Wettbewerberfunktionen wurden über öffentliche Seiten, Doku und Presse geprüft – **nicht**
-   durchgängig durch eigene Account-Anlage und Testnähung. Die Spalte „getestet" in
-   [`competitors.md`](competitors.md) sagt genau, was tatsächlich geprüft wurde.
-4. Marktzahlen von Marktforschungs-Portalen (unten) sind teils widersprüchlich und werden
-   als solche gekennzeichnet.
+## 2. Der Aufbau in einem Bild
+
+```
+app/
+├── src/
+│   ├── core/            ← der Kern: reine Funktionen, kein React, keine Zeit, kein Zufall
+│   │   ├── types.ts         Domänentypen (Module, Teile, Findings, Operationen)
+│   │   ├── geometry.ts      mm-Typ, Rect-Mathematik, Hash, SVG-Pfade
+│   │   ├── modules.ts       die 16 Module: Maße, Schnittteile, Regeln, Zeichnung (1508 Zeilen)
+│   │   ├── construction.ts  Pipeline: layout → pieces → materials → operations → findings
+│   │   ├── practice.ts      alle Praxiswerte (Nahtzugabe, Garnfaktor, Grenzwerte) — eine Stelle
+│   │   ├── fixes.ts         „Problem beheben“-Aktionen
+│   │   ├── export.ts        SVG, A4-Kachelung, Druck-HTML
+│   │   ├── pdf.ts           echtes PDF mit pdf-lib (vektoriell, maßhaltig)
+│   │   └── project.ts       Zod-Schema, Migration, localStorage, Vorlagen
+│   ├── state/store.ts   ← Zustand: Projekt (undo-fähig) getrennt von Session (flüchtig)
+│   ├── ui/              ← React: 5 Ansichten + Canvas + Panels
+│   └── i18n/de.ts       ← alle sichtbaren Texte (Deutsch), 527 Schlüssel
+├── tests/acceptance.spec.ts   ← die Abnahmekriterien aus `docs/product/prd.md`, als Playwright-Test
+└── docs-shots/                ← Screenshots des laufenden Editors + Beispiel-PDF
+```
+
+**Die eine Regel, die den ganzen Aufbau erklärt:** `src/core/` kennt weder React
+noch `localStorage` noch `Date.now()`. Der Kern ist eine Funktion
+`Project → Construction`. Deshalb ist er in Node testbar (189 Tests laufen in
+~2 s), deterministisch und für ein zweites Frontend wiederverwendbar.
+
+---
+
+## 3. Die App in Bildern
+
+| Vorlagen | Editor (Schmuck) |
+| --- | --- |
+| ![Vorlagen](docs/assets/vorlagen.png) | ![Editor](docs/assets/editor.png) |
+| **Material** | **Schnittmuster** |
+| ![Material](docs/assets/material.png) | ![Schnittmuster](docs/assets/schnittmuster.png) |
+| **Anleitung** | **Dichte Vorlage (Strick, 11 Module)** |
+| ![Anleitung](docs/assets/anleitung.png) | ![Strick](docs/assets/strick.png) |
+
+Alle Bilder sind Screenshots des laufenden Editors, nicht Mockups.
+Weitere (Tablet, Telefon, gedrehtes Modul) liegen in `app/docs-shots/`,
+ein Beispiel-PDF in `app/docs-shots/schnittmuster-beispiel.pdf`.
+
+---
+
+## 4. Was die App kann
+
+### Drei Vorlagen, alle geprüft
+
+| Vorlage | Grundfläche | Module | Teile | Prüfung | Hash |
+| --- | --- | --- | --- | --- | --- |
+| Schmuck-Organizer | 240 × 200 mm, Bund 32 | 5 | 10 Zuschnittteile | 0 Fehler / 0 Warnungen | `536766d8` |
+| Make-up-Organizer | 280 × 240 mm, Bund 30 | 6 | 13 Zuschnittteile | 0 / 0 | `dc2a59aa` |
+| Stricknadel-Organizer | 240 × 330 mm, Bund 36 | 11 | 21 Zuschnittteile | 0 / 0 | `5ed64ba1` |
+
+Die Hashes sind Golden-Werte: sie ändern sich, wenn sich Geometrie, Praxiswerte
+oder Parameterauswertung ändern. Tests halten Determinismus und
+Vorlagen-Prüfergebnisse fest; die literalen Hashes stehen hier und in
+`AGENTS.md` als Referenz und in `docs/PHASE-3.md`.
+
+### Fünf Ansichten
+
+1. **Editor** — Canvas mit Grundfläche, Zeilen, Modulen; Bibliothek links,
+   Eigenschaften und Warnungen rechts; Zoom 0,35–14, Raster, Snapping, Undo/Redo.
+2. **Schnittmuster** — Kontrollmaßstab 50 × 50 mm, Aufteilung je Teil auf
+   A4-Seiten, Maßtabelle.
+3. **Material** — Mengen mit Einheit und Grundlage („170 mm · Öffnung 150 mm +
+   20 mm Zugabe“), Zuschnittplan auf der Stoffbahn, exakt vs. geschätzt.
+4. **Anleitung** — topologisch sortierte Nähschritte in fünf Phasen.
+5. **Projekt** — Vorlagen, Speichern, Laden, JSON-Import/-Export.
+
+### Ausgabe
+
+- **PDF** (vektoriell, 1 mm = 72/25,4 pt): Deckblatt mit Kontrollmaßstab,
+  Material, Zuschnitt, eine Seite je Kachel mit Klebekanten, Anleitung.
+- **Druck-HTML** aus demselben Kern, für den Browser-Druckdialog.
+- **SVG** des ganzen Schnittmusters.
+- **JSON** des Projekts (schema-versioniert, migrierbar).
+
+---
+
+## 5. Wie man es bedient
+
+| Aktion | Maus | Tastatur |
+| --- | --- | --- |
+| Modul hinzufügen | Bibliothek-Kachel klicken oder auf Canvas ziehen | — |
+| Auswählen | Klick auf Modul | `Tab` + `Enter`/`Space` |
+| Verschieben | ziehen | — |
+| Drehen (90°) | Knopf „Drehen“ in der Werkzeugleiste | `R` (genau ein Modul gewählt) |
+| Duplizieren | — | `Ctrl/⌘ + D` |
+| Löschen | — | `Entf` / `Rücktaste` |
+| Undo / Redo | Knöpfe oben | `Ctrl/⌘ + Z` / `Ctrl/⌘ + Shift + Z` |
+| Auswahl aufheben | Klick ins Leere | `Esc` |
+| Ansicht wechseln | Tabs | `1`…`5` |
+
+---
+
+## 6. Wo die Wahrheit liegt
+
+Dieses Repository hat zwei Ebenen Dokumentation. Verwechslung ist der häufigste
+Einstiegsfehler:
+
+| Ebene | Pfad | Status |
+| --- | --- | --- |
+| **Spezifikation & Recherche** | `docs/` | Phase 1–2, abgeschlossen. Beschreibt Absicht, Markt, Architektur, Teststrategie. Enthält auch **nicht Gebautes** (Rollenform, Expertenmodus). |
+| **Implementierung** | `app/src/`, `app/tests/` | Phase 3, lauffähig. Der Code ist hier die Wahrheit. |
+
+Wo beide voneinander abweichen, gilt der Code — und die Abweichung steht in
+[`docs/PHASE-3.md`](docs/PHASE-3.md) §3, u. a. eine Tabelle, in der die
+Modul-IDs der Spezifikation anderen Modulen entsprechen als in der
+Implementierung. **IDs wurden absichtlich nicht umbenannt** (Bestanddaten,
+Tests und Hashes hängen daran).
+
+---
+
+## 7. Dokumentenkarte
+
+### Einstieg
+- **[AGENTS.md](AGENTS.md)** — Anleitung für KI-Assistenten: Regeln, Fallen,
+  Prüfbefehle, Landkarte. *Wer hier mit einem Agenten arbeitet, liest das zuerst.*
+- **[docs/PHASE-3.md](docs/PHASE-3.md)** — was gebaut ist, was nicht, und warum.
+- **[docs/engineering/README.md](docs/engineering/README.md)** — Übersicht der
+  technischen Dokumente inkl. Abweichungen Code ↔ Spezifikation.
+
+### Spezifikation (`docs/`)
+- `product/prd.md` — Anforderungen, Regeln (V-G/V-M), Abnahmekriterien.
+- `product/module-library.md` — die 16 Module fachlich (Spezifikations-IDs!).
+- `product/user-flows.md`, `product/mvp-scope.md`, `product/product-vision.md`.
+- `engineering/` — Architektur, Geometrie-Engine, Konstruktionsregeln,
+  Materialberechnung, Export-System, Datenmodell, Teststrategie.
+- `research/` — Markt, Wettbewerber, Zielgruppen, `decision-brief.md`.
+- `architecture-review.md` — 15 Architekturentscheidungen (K-01…M-15), die die
+  Implementierung binden.
+
+---
+
+## 8. Was dieses Projekt nicht ist
+
+- **Kein CAD.** Keine freie Kontur, keine Booleschen Operationen. Ein Etui in
+  Buchform, zwei Lagen Stoff, ein Bund, Zeilen mit Modulen.
+- **Keine Cloud.** Kein Konto, kein Server, kein Tracking. Projekte im Browser.
+- **Kein fertiges Produkt.** Phase 3 ist ein lauffähiger Prototyp mit
+  dokumentierten Lücken (siehe `docs/PHASE-3.md` §4) — nicht marktreif.
+- **Kein deutsch-englisches Projekt.** Die Oberfläche ist deutsch; Code,
+  Kommentare und Bezeichner sind deutsch, weil die Fachbegriffe (Nahtzugabe,
+  Fadenlauf, Einschlag) deutsch sind. Englisch wäre hier eine Übersetzung
+  zusätzlich zur Sache.
+
+---
+
+## 9. Stand
+
+26. November 2026 · Praxiswerte v1.2.0 · Schema v2
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx tsc --noEmit` | 0 Fehler (strict, `noUncheckedIndexedAccess`) |
+| `npx eslint src` | 0 Fehler (u. a. `no-explicit-any` verboten) |
+| `npx vitest run` | **189 Tests** in 5 Dateien |
+| `npx playwright test` | **27 Tests** (Abnahmekriterien aus `docs/product/prd.md`) |
+| `npm run build` | OK · Editor 388 kB (gzip 111 kB) · PDF separat 428 kB |
+
+Die Zahlen sind nachprüfbar; sie stehen als Prüfblock auch in `AGENTS.md` und
+sollten dort aktualisiert werden, wenn sie sich ändern.

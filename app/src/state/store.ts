@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { construct, type Construction, type Project } from '../core/construction';
 import { applyFix, findingKey } from '../core/fixes';
 import { PRACTICE } from '../core/practice';
+import { t } from '../i18n/de';
 import {
   addRow,
   blankProject,
@@ -195,7 +196,7 @@ export const useStore = create<StoreState>((set, get) => {
       const src = p.modules.find((m) => m.id === id);
       if (!src) return;
       get().setPar((prev) => duplicateInstance(prev, id));
-      get().toast('Dupliziert', 'ok');
+      get().toast(t('toast.duplicated'), 'ok');
     },
 
     remove: (ids) => {
@@ -282,7 +283,7 @@ export const useStore = create<StoreState>((set, get) => {
       const after = get().construction;
       if (after.projectHash === before.projectHash) {
         // Ehrlich bleiben: ein Fix, der nichts ändert, wird nicht als Erfolg verkauft.
-        get().toast('Dieser Fix ändert am aktuellen Zustand nichts.', 'error');
+        get().toast(t('toast.fixNoEffect'), 'error');
         return;
       }
       get().dismiss(findingKey(f));
@@ -296,10 +297,16 @@ export const useStore = create<StoreState>((set, get) => {
 
     save: () => {
       const p = { ...get().project, updatedAt: nowIso() };
-      saveToLibrary(p);
-      saveCurrent(p);
+      const okLibrary = saveToLibrary(p);
+      const okCurrent = saveCurrent(p);
+      if (!okLibrary || !okCurrent) {
+        // Ehrlich bleiben: nicht als gespeichert melden, wenn es nicht persistiert ist.
+        set({ project: p, saved: false, library: loadLibrary() });
+        get().toast(t('toast.saveFailed'), 'error');
+        return;
+      }
       set({ project: p, saved: true, library: loadLibrary() });
-      get().toast('Projekt gespeichert', 'ok');
+      get().toast(t('toast.saved'), 'ok');
     },
 
     loadStored: (id) => {
@@ -316,7 +323,7 @@ export const useStore = create<StoreState>((set, get) => {
         session: { ...emptySession, view: get().session.view },
         revision: get().revision + 1,
       });
-      get().toast('Projekt geladen', 'ok');
+      get().toast(t('toast.projectLoaded'), 'ok');
     },
 
     removeStored: (id) => {
@@ -336,7 +343,7 @@ export const useStore = create<StoreState>((set, get) => {
         session: { ...emptySession },
         revision: get().revision + 1,
       });
-      get().toast('Vorlage geladen', 'ok');
+      get().toast(t('toast.loaded'), 'ok');
     },
 
     newProject: () => {
@@ -369,7 +376,7 @@ export const useStore = create<StoreState>((set, get) => {
         session: { ...emptySession },
         revision: get().revision + 1,
       });
-      get().toast('Projekt importiert', 'ok');
+      get().toast(t('toast.imported'), 'ok');
       return { ok: true };
     },
 
@@ -402,7 +409,7 @@ export const useStore = create<StoreState>((set, get) => {
         session: { ...emptySession },
         revision: get().revision + 1,
       });
-      get().toast('Projekt zurückgesetzt', 'info');
+      get().toast(t('toast.reset'), 'info');
     },
   };
 });

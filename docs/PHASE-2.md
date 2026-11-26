@@ -1,6 +1,6 @@
 # Phase 2: Product Design, UX & System Architecture
 
-Stand: 26.11.2026 · Grundlage: [`docs/research/`](../research/) (Phase 1, abgeschlossen)
+Stand: 26.11.2026 · Grundlage: [`docs/research/`](research/) (Phase 1, abgeschlossen)
 
 ---
 
