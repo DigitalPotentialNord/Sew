@@ -20,11 +20,26 @@ const mm = (v: number): number => v * PT;
 const INK = rgb(0.07, 0.07, 0.07);
 
 /**
- * WinAnsi-fähiger Text. Die Standard-PDF-Fonts (Helvetica) können kein „→“ oder
- * „·“ in jeder Form — Ersatzzeichen sind besser als verschluckte Zeichen.
+ * WinAnsi-fähiger Text. pdf-lib wirft bei Zeichen außerhalb von cp1252
+ * („✂ mein Etui“ als Projektname) — der PDF-Export wäre sonst unbenutzbar,
+ * sobald ein Import ein Emoji mitbringt. Deshalb: cp1252-Whitelist,
+ * alles andere wird zu „?“, Gedankenstrich/Pfeile wie bisher ersetzt.
  */
-function safe(text: string): string {
-  return text.replace(/[\u2013\u2014]/g, '-').replace(/[\u2192]/g, '->').replace(/[\u00d7]/g, 'x').replace(/[\u00b7]/g, '-');
+const CP1252_EXTRA = new Set([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x017d,
+  0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
+]);
+export function safe(text: string): string {
+  return text
+    .replace(/[–—]/g, '-')
+    .replace(/→/g, '->')
+    .replace(/×/g, 'x')
+    .replace(/·/g, '-')
+    .replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, (ch) => {
+      const cp = ch.codePointAt(0) ?? 0;
+      if (cp < 0x20 || cp === 0x7f) return ' '; // Steuerzeichen → Leerzeichen
+      return CP1252_EXTRA.has(cp) ? ch : '?';
+    });
 }
 
 /**

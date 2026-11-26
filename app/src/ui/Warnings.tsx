@@ -6,8 +6,6 @@ import { fixLabel } from './Properties';
 
 import { findingKey } from '../core/fixes';
 
-export { findingKey };
-
 export function Warnings(): JSX.Element {
   const findings = useStore((s) => s.construction.findings);
   const dismissed = useStore((s) => s.session.dismissed);

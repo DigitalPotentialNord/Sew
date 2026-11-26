@@ -54,7 +54,7 @@ Browser; Projekte liegen im `localStorage`, Exporte sind Dateien.
 | `npm run build` | Typen prüfen + Produktionsbuild nach `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint 9 (flat config) |
-| `npm test` | 189 Unit-Tests (Vitest, `src/_tests/`) |
+| `npm test` | 193 Unit-Tests (Vitest, `src/_tests/`) |
 | `npm run e2e` | 27 Abnahmetests (Playwright, `tests/`) |
 | `npm run check` | typecheck + lint + test — **vor jedem Commit** |
 
@@ -92,7 +92,7 @@ app/
 
 **Die eine Regel, die den ganzen Aufbau erklärt:** `src/core/` kennt weder React
 noch `localStorage` noch `Date.now()`. Der Kern ist eine Funktion
-`Project → Construction`. Deshalb ist er in Node testbar (189 Tests laufen in
+`Project → Construction`. Deshalb ist er in Node testbar (193 Tests laufen in
 ~2 s), deterministisch und für ein zweites Frontend wiederverwendbar.
 
 ---
@@ -226,7 +226,7 @@ Tests und Hashes hängen daran).
 | --- | --- |
 | `npx tsc --noEmit` | 0 Fehler (strict, `noUncheckedIndexedAccess`) |
 | `npx eslint src` | 0 Fehler (u. a. `no-explicit-any` verboten) |
-| `npx vitest run` | **189 Tests** in 5 Dateien |
+| `npx vitest run` | **193 Tests** in 5 Dateien |
 | `npx playwright test` | **27 Tests** (Abnahmekriterien aus `docs/product/prd.md`) |
 | `npm run build` | OK · Editor 388 kB (gzip 111 kB) · PDF separat 428 kB |
 

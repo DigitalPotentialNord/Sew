@@ -5,7 +5,6 @@
 import { create } from 'zustand';
 import { construct, type Construction, type Project } from '../core/construction';
 import { applyFix, findingKey } from '../core/fixes';
-import { PRACTICE } from '../core/practice';
 import { t } from '../i18n/de';
 import {
   addRow,
@@ -19,7 +18,6 @@ import {
   loadLibrary,
   makeInstance,
   moveInstance,
-  newId,
   nowIso,
   removeInstance,
   removeRow,
@@ -101,8 +99,7 @@ interface StoreState {
   loadStored: (id: string) => void;
   removeStored: (id: string) => void;
   loadTemplate: (id: TemplateId) => void;
-  newProject: () => void;
-  importProject: (raw: unknown) => { ok: boolean; message?: string };
+  newProject: () => void;  importProject: (raw: unknown) => { ok: boolean; message?: string };
   exportProject: () => unknown;
   refreshLibrary: () => void;
   toast: (message: string, tone?: Toast['tone']) => void;
@@ -414,13 +411,4 @@ export const useStore = create<StoreState>((set, get) => {
   };
 });
 
-export function useSelectedModule(): { id: string; typeId: ModuleTypeId } | null {
-  const sel = useStore((s) => s.session.selection);
-  const modules = useStore((s) => s.project.modules);
-  if (sel.length !== 1) return null;
-  const m = modules.find((x) => x.id === sel[0]);
-  return m ? { id: m.id, typeId: m.typeId } : null;
-}
-
-export { newId, PRACTICE };
 export type { Project };

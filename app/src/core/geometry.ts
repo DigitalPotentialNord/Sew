@@ -172,27 +172,6 @@ export function snapTo(value: number, step: number): Mm {
   return mm(Math.round(value / step) * step);
 }
 
-/**
- * Einrasten auf Kandidatenlinien innerhalb einer Toleranz.
- * Gibt den gerasteten Wert und die getroffene Linie zurück (für Hilfslinien-Anzeige).
- */
-export function snapToLines(
-  value: number,
-  candidates: readonly number[],
-  tolerance: number,
-): { value: Mm; line: number | null } {
-  let best: number | null = null;
-  let bestDist = tolerance;
-  for (const c of candidates) {
-    const d = Math.abs(c - value);
-    if (d <= bestDist) {
-      bestDist = d;
-      best = c;
-    }
-  }
-  return { value: mm(best ?? value), line: best };
-}
-
 /** Deterministischer, stabiler String-Hash (FNV-1a 32 bit, hex). */
 export function hashString(input: string): string {
   let h = 0x811c9dc5;

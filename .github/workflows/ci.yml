@@ -8,6 +8,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: dieser Job braucht nur Leserechte.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipSegment, wrapText, buildPdf } from '../core/pdf';
+import { clipSegment, wrapText, buildPdf, safe } from '../core/pdf';
 import { construct } from '../core/construction';
 import { buildTemplate } from '../core/project';
 
@@ -83,5 +83,19 @@ describe('buildPdf', () => {
     const empty = construct({ ...buildTemplate('schmuck'), modules: [] });
     const bytes = await buildPdf(empty, { ...strings, materials: [], cutList: [] });
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+  });
+});
+describe('safe (WinAnsi)', () => {
+  it('lässt cp1252-Zeichen inklusive Umlaute und deutscher Quotes unverändert', () => {
+    expect(safe('Nadelkanäle „Maßhaltig“ — 100 %')).toBe('Nadelkanäle „Maßhaltig“ - 100 %');
+  });
+  it('ersetzt Pfeil und Multiplikation wie dokumentiert', () => {
+    expect(safe('a → b × c')).toBe('a -> b x c');
+  });
+  it('ersetzt Zeichen außerhalb von cp1252 (Emoji, CJK) statt abzustürzen', () => {
+    expect(safe('mein Etui ✂✂ 幅')).toBe('mein Etui ?? ?');
+  });
+  it('normalisiert Steuerzeichen zu Leerzeichen', () => {
+    expect(safe('a\nb\tc')).toBe('a b c');
   });
 });

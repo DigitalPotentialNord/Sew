@@ -13,7 +13,7 @@ mit den Entscheidungen K-01…M-15) als Maßstab, nicht als Wahrheit.
 ## 1. Executive Summary
 
 Der **Code** war bereits deutlich über Prototyp-Niveau: ein reiner, deterministischer
-Kern (`Project → Construction`), 189 Unit-Tests inkl. Golden-Hashes, Zod-Validierung an den
+Kern (`Project → Construction`), 193 Unit-Tests inkl. Golden-Hashes, Zod-Validierung an den
 Systemgrenzen, konsequente Einheiten- und Pausregel-Disziplin, eine deutsche, gepflegte
 Doku-Kultur. Das **Repository** war das Gegenteil: ein flacher Upload („Add files via
 upload", Commit `4bde58c`), in dem **nichts mehr lief** — `index.html` zeigte auf ein
@@ -29,7 +29,11 @@ Build-Artefakte und ein leerer Ordner-Platzhalter waren eingecheckt.
 | GitHub Pages | nicht vorhanden | Workflow `pages.yml`, testweise live unter `/Sew/` |
 | `.gitignore` / Hygiene | fehlte / Artefakte eingecheckt | vorhanden; `download`, `last-run.json`, `tsconfig.tsbuildinfo` entfernt |
 | Persistenz-Sicherheit | Schreibzugriffe unguarded | ehrlich gemeldete Fehlschläge statt Exception |
-| Determinismus | Golden-Hashes stabil | **weiterhin 189/189 Tests grün, Hashes unverändert** |
+| Dead Code / Layering | vorhanden (`snapX`, `useSelectedModule` …) | entfernt, `findingKey`-Layering korrigiert |
+| PDF-Robustheit | pdf-lib-Crash bei Emoji/CJK im Projektnamen möglich | cp1252-Whitelist `safe()` + Tests |
+
+**Status nach zweiter Prüfrunde (§10):** 193/193 Tests grün, Dead Code entfernt, PDF/cp1252 gehärtet, CI least-privilege, `.gitattributes`/`.editorconfig` ergänzt.
+| Determinismus | Golden-Hashes stabil | **weiterhin 193/193 Tests grün, Hashes unverändert** |
 
 **Ampel:** Kern-Architektur 🟢 · Repo-/Release-Infrastruktur 🟢 (nach Fixes) · Supply-Chain
 (npm audit) 🟡 · Lizenz/Branch-Protection 🟠 (Entscheidung offen, s. §6).
@@ -63,7 +67,7 @@ Build-Artefakte und ein leerer Ordner-Platzhalter waren eingecheckt.
 ## 3. Durchgeführte Maßnahmen (mit Verifikation)
 
 Alle Änderungen sind durch `npm run check` (typecheck + eslint + vitest) und
-`npm run build` belegt: **0 TS-Fehler · 0 Lint-Fehler · 189/189 Tests grün ·
+`npm run build` belegt: **0 TS-Fehler · 0 Lint-Fehler · 193/193 Tests grün ·
 Build OK** (Editor-Chunk ≈ 388 kB / 110,6 kB gzip, `pdf`-Chunk separat 428 kB).
 Die drei Vorlagen-Hashes sind unverändert (`536766d8`, `dc2a59aa`, `5ed64ba1`) —
 keine der Code-Änderungen berührt Geometrie, Praxiswerte oder Parameterauswertung.
@@ -75,7 +79,7 @@ keine der Code-Änderungen berührt Geometrie, Praxiswerte oder Parameterauswert
 | M3 | Angehängtes `README.md` („Organizer Studio") + `AGENTS.md` ins Root; altes Root-README → `docs/research/README.md` | `README.md`, `AGENTS.md`, `docs/research/README.md` |
 | M4 | `.gitignore` (node_modules, dist, tsbuildinfo, Test-Artefakte, Env, OS) | `.gitignore` |
 | M5 | Müll entfernt: `download`, `last-run.json`, `tsconfig.tsbuildinfo` | gelöscht |
-| M6 | CI: `typecheck` → `lint` → `test` (189) → `build` auf jeder PR/Push nach main; npm cache, `npm ci` | `.github/workflows/ci.yml` |
+| M6 | CI: `typecheck` → `lint` → `test` (193) → `build` auf jeder PR/Push nach main; npm cache, `npm ci` | `.github/workflows/ci.yml` |
 | M7 | Pages-Deploy: Build mit `VITE_BASE_PATH=/Sew/`, `configure-pages`/`upload-pages-artifact`/`deploy-pages`, Trigger `push: main` + `workflow_dispatch`; Pages-Build lokal verifiziert (Assets unter `/Sew/`, Preview HTTP 200) | `.github/workflows/pages.yml`, `app/vite.config.ts` |
 | M8 | `index.html`: Meta-Description (DE) + `theme-color` | `app/index.html` |
 | M9 | `package.json`: `engines.node >= 20` (Doku-Anforderung; lockfile synchronisiert) | `app/package.json`, `app/package-lock.json` |
@@ -191,7 +195,7 @@ ersetzen oder (b) Anzeige/basisValues angleichen. (a) ist konservativer (mehr Me
 | GHSA-67mh | esbuild/vite ≤6.4.3 | nur Dev-Server | vite ≥8 (breaking) |
 | GHSA-mrhx | zod <4.6.6 | **Laufzeit** (Import-Validierung) | zod ≥4.6.7 (breaking) |
 
-**Empfehlung:** geplantes Major-Upgrade (Branch + Abnahmetests + 189 Unit-Tests als Netz).
+**Empfehlung:** geplantes Major-Upgrade (Branch + Abnahmetests + 193 Unit-Tests als Netz).
 `npm audit fix --force` ist **kein** akzeptabler Pfad ohne Migration-Review. Bis dahin:
 CI führt `npm audit --omit=dev --audit-level=high` als nicht-blockierende Warnung
 (`continue-on-error` wäre die Alternative — bewusst nicht erzwungen, da das Gate sonst sofort rot wäre).
@@ -209,7 +213,7 @@ außerhalb „Code" — ohne dein Go setze ich sie nicht um (Lizenz ist rechtlic
   sind Typsache, nicht Konvention.
 - **Zod an den Grenzen**, Referenzintegrität (eindeutige IDs, Zeilenexistenz, Modul-Allowlist),
   Schema-Migration (`schemaVersion`) mit Test.
-- **189 Unit-Tests** inkl. Determinismus- und Template-Invarianten; Golden-Hashes als
+- **193 Unit-Tests** inkl. Determinismus- und Template-Invarianten; Golden-Hashes als
   bewusster Regressionsanker; Playwright-Abnahmetests aus der PRD abgeleitet.
 - **ErrorBoundary**, Sichtbar-/Tastatur-Bedienbarkeit (R, Ctrl+D, 1–5, Entf),
   `role=status`, `aria-label` an Modulen, Touch-Panels ab <1000 px.
@@ -237,7 +241,7 @@ außerhalb „Code" — ohne dein Go setze ich sie nicht um (Lizenz ist rechtlic
 cd app
 npx tsc --noEmit     → 0 Fehler (strict, noUncheckedIndexedAccess)
 npx eslint .         → 0 Fehler
-npx vitest run       → 189 Tests / 5 Dateien grün
+npx vitest run       → 193 Tests / 5 Dateien grün
 npm run build        → OK · Editor ≈ 388 kB (gzip ≈ 111 kB) · pdf-Chunk 428 kB
 VITE_BASE_PATH=/Sew/ → Build + `vite preview`: /Sew/ liefert HTTP 200, Assets korrekt referenziert
 Vorlagen-Hashes      → schmuck 536766d8 · makeup dc2a59aa · strick 5ed64ba1 (unverändert)
@@ -246,3 +250,53 @@ Markdown-Link-Check  → alle relativen Links OK
 
 E2E (Playwright) wurde in diesem Audit **nicht** ausgeführt (Chromium-Download auf
 außerhalb der Lab-Whitelist); die 27 Abnahmetests laufen lokal wie dokumentiert.
+
+---
+
+## 10. Zweite Prüfrunde (26.11.2026, abends) — tieferer Scan
+
+Scope: Dead Code, i18n-Vollständigkeit, Dateinamen-/PDF-Robustheit, UI-Layering,
+Config-Hygiene, Testabdeckung. Alles Verifizierte gilt für den Branch-Stand mit
+desselben Golden-Hashes (`536766d8` / `dc2a59aa` / `5ed64ba1` — unverändert).
+
+### Behoben in dieser Runde (193/193 Tests grün, Build OK)
+
+| ID | Schwere | Befund | Fix |
+| --- | --- | --- | --- |
+| F-35 | M | **PDF-Export konnte crashen:** pdf-lib `drawText` wirft außerhalb cp1252 (Emoji/CJK aus einem importierten Projektnamen). try/catch in der UI fing es ab, aber Export war dann schlicht unbenutzbar | `safe()` neu: cp1252-Whitelist + CP1252-Extras, Rest → `?`, Steuerzeichen → Leerzeichen; 4 neue Tests (`safe` in `pdf.test.ts`) |
+| F-36 | N | Toter Export: `snapX`/`SnapResult` (Canvas snappt selbst), `piecesBBox`, `snapToLines` (nur `snapX` nutzte ihn) | entfernt; Imports (`bbox`, `snapTo`) bereinigt |
+| F-37 | N | Toter Store-Code: `useSelectedModule` ohne Aufrufer/Tests; Re-Export `newId`/`PRACTICE` unnötig | entfernt |
+| F-38 | N | Layering: `App.tsx` importierte `findingKey` durch `Warnings.tsx` statt aus `core/fixes` | direkter Import; Re-Export entfernt |
+| F-39 | N | `ci.yml` ohne `permissions`-Block (Default-Rechte zu breit) | `permissions: contents: read` |
+| F-40 | N | Keine `.gitattributes`/`.editorconfig` — Zeilenende-/Binär-Behandlung ungeregelt | beide ergänzt (`*.pdf/-png` binary, LF, 2er-Indent) |
+| F-41 | N | Testzähler-Drift in Doku (189 → 193 überall synchronisiert) | README/AGENTS/PHASE-3/Audit |
+
+### i18n-Audit — Ergebnis: vollständig
+
+- 339 statische `t('…')`-Referenzen: **alle definiert**, keine fehlt zur Laufzeit.
+- Dynamische Schlüssel-Familien per Literal-Abgleich geprüft (`mat.*`, `phase.*`,
+  `lib.cat.*`, `rule.<ruleId>.title|detail`, `fix.*`, `mod.*`, `piece.*`, `note.*`,
+  `basis.*`, `v.*`, `f.*`, `help.*`, `op.*`, `instr.*`, `unit.*`, `u.*`, `warn.*`):
+  **keine Lücke** — jede im Code referenzierte `ruleId` hat `.title` und `.detail`.
+- Keine hartcodierten sichtbaren Strings mehr im UI-Layer (CP1252-Code-Pfad ausgenommen).
+- Kein verwendeter Schlüssel fehlt (vorher: F-19).
+
+### Neu gefunden — bewusst offen (Entscheidungen nötig)
+
+| ID | Schwere | Befund | Vorschlag |
+| --- | --- | --- | --- |
+| F-42 | M | **Ungespeicherte Arbeit geht ohne Rückfrage verloren:** Vorlage laden / neues Projekt / Import / gespeichertes Projekt laden ersetzen den Stand sofort (nur Löschen hat Inline-Confirm). E2E klickt Template-Karten direkt — ein Rückfrage-Dialog muss e2e-kooperativ inline gelöst werden, nicht via `window.confirm` | Inline-Confirm (wie Löschen) oder dirty-Flag + Blocker; mit dir klären |
+| F-43 | M | Dev-/Preview-Server mit `allowedHosts: true` und Bindung `0.0.0.0` (nötig für die Arena-Live-Preview) — auf Entwicklermaschinen LAN-sichtbar | In AGENTS.md dokumentieren oder per Env-Flag (`OPEN_HOSTS`) begrenzen |
+| F-44 | M | **Store-Schicht ungetestet** (Persistenz, Undo/Redo, Save-Fehlerpfade, `resetToSaved`) — Zustand ist isoliert testbar (node-Env), wäre ein echter Industrie-Baustein | `src/_tests/store.test.ts` (~15–20 Tests); Vorlage: `project.test.ts` localStorage-Shim |
+| F-45 | N | Supply-Chain-Pinning: Actions als `@v4`-Major-Pins statt Commit-SHA; Dependabot geschlossen Lücke nicht automatisch | SHA-Pins + Dependabot zusammen |
+| F-46 | N | Qualitäts-Gate für Vorlagen (0 Fehler/0 Warnungen, Hash-Referenzen) liegt nur in AGENTS.md/README, nicht als Script | `npm run verify:templates` (Sonde) im Repo, optional in CI |
+| F-47 | N | `size-limit`/Bundle-Budget-Wächter fehlt | optional; aktuell 388 kB Editor / 428 kB PDF-Chunk (separat) |
+| F-48 | N | `toFile()` hardcodiert `appVersion: '0.1.0'` — drifted gegen `package.json` | Single Source (JSON-Import oder Vite-Define) |
+| F-49 | N | `npm run e2e` nicht automatisiert (Chromium-Download) — lokal ok, CI offen | Nightly-Job oder Playwright-Cache |
+| F-50 | N | Branch-Protection + LICENSE + Dependabot + PR-/Issue-Templates + SHA-Pins (F-29–F-32, F-45) | Entscheidung §6 |
+
+### Prüfung, die bewusst NICHT passiert ist
+
+Kein Browser-Render-Test dieser Runde (Snapshot/Screenshot); optischer
+Regressionsschutz existiert über E2E + `docs-shots/`. Sichtprüfung nach
+Mergen empfohlen.

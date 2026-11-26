@@ -3,7 +3,7 @@
  * Reine Funktion, deterministisch, ohne React/Zeit/Zufall.
  * Siehe docs/engineering/system-architecture.md §4 und construction-rules.md.
  */
-import { bbox, hashString, mm, rect, snapTo, type Mm, type Rect } from './geometry';
+import { hashString, mm, rect, type Mm, type Rect } from './geometry';
 import { moduleDef } from './modules';
 import { LIMITS, PRACTICE } from './practice';
 import { findingKey } from './fixes';
@@ -928,31 +928,3 @@ export function construct(p: Project): Construction {
     },
   };
 }
-
-// ─── Hilfen für die UI (Snapping) ────────────────────────────────────────────
-export interface SnapResult {
-  readonly x: Mm;
-  readonly line: number | null;
-}
-
-/** Rastet eine Modulposition auf Nachbarkanten und Raster. */
-export function snapX(p: Project, rowId: string, instanceId: string, desiredX: number, gridMm: number, toleranceMm: number): SnapResult {
-  const insts = p.modules.filter((m) => m.rowId === rowId && m.id !== instanceId);
-  const ctx = baseContext(p);
-  const candidates: number[] = [PRACTICE.edgeMarginMm];
-  let cursor = PRACTICE.edgeMarginMm;
-  for (const m of insts) {
-    const w = occupied(m, ctx).w;
-    candidates.push(cursor);
-    cursor += w;
-  }
-  const gridSnap = snapTo(desiredX, gridMm);
-  const near = candidates.some((c) => Math.abs(c - desiredX) <= toleranceMm);
-  return near ? { x: mm(candidates.reduce((a, c) => (Math.abs(c - desiredX) < Math.abs(a - desiredX) ? c : a), candidates[0]!)), line: null } : { x: gridSnap, line: null };
-}
-
-export function piecesBBox(pieces: readonly ComputedPiece[]): Rect {
-  return bbox(pieces.filter((x) => x.kind === 'cut').map((x) => x.cutRect));
-}
-
-
