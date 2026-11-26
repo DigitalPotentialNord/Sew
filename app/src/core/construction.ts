@@ -21,7 +21,13 @@ import type {
 } from './types';
 
 // ─── Projektmodell (Eingabe) ─────────────────────────────────────────────────
-export const SCHEMA_VERSION = 2;
+// v3: `Instance.side` — auf welcher Innenfläche ein Modul sitzt. Siehe
+// docs/architecture/positioning-model-decision.md. Migration v2→v3 vergibt
+// 'left' (nicht-destruktiv: ein v2-Projekt sieht danach genauso aus wie vorher).
+export const SCHEMA_VERSION = 3;
+
+/** Innenfläche eines aufgeschlagenen Mäppchens. Siehe Positionsmodell-Entscheid. */
+export type Side = 'left' | 'right';
 
 export interface ProjectBase {
   readonly form: 'book';
@@ -39,6 +45,8 @@ export interface Instance {
   readonly params: Params;
   readonly rotation: 0 | 90 | 180 | 270;
   readonly locked: boolean;
+  /** Auf welcher Innenfläche das Modul genäht wird (v3). */
+  readonly side: Side;
 }
 
 export interface RowSpec {
@@ -83,6 +91,9 @@ export interface PlacedRow {
   readonly rect: Rect;
   readonly fillPct: number;
   readonly usedMm: Mm;
+  /** Belegte Breite je Innenfläche (v3) — die Budgetregel gilt pro Seite. */
+  readonly usedLeft: Mm;
+  readonly usedRight: Mm;
 }
 
 export interface ComputedPiece extends PieceSpec {
@@ -126,7 +137,10 @@ export interface FabricPlan {
 export interface Construction {
   readonly projectHash: string;
   readonly practiceVersion: string;
+  /** Einzelne Innenfläche (width × height) — Referenzmaß für Export/PDF-Label. */
   readonly flap: Rect;
+  /** Volles aufgeschlagenes Mäppchen ((2·width + spine) × height) — Design-Ansicht. */
+  readonly book: Rect;
   readonly rows: readonly PlacedRow[];
   readonly modules: readonly PlacedModule[];
   readonly pieces: readonly ComputedPiece[];
@@ -188,10 +202,16 @@ function checkContext(p: Project, drawWide: boolean, freeAlongRow: number, rowRo
 }
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
+// Seit v3 wird je Innenfläche (`side`) platziert: linke Module auf dem linken
+// Flap [0, width], rechte auf dem rechten Flap [width+spine, 2·width+spine].
+// Zeilen sind gemeinsame horizontale Bänder — ihre Höhe ist das Maximum beider
+// Seiten, sodass die Bänder über dem Falz fluchten (wie ein echtes Etui).
 function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findings: Finding[] } {
   const findings: Finding[] = [];
   const availW = p.base.widthMm - 2 * PRACTICE.edgeMarginMm;
   const availH = p.base.heightMm - 2 * PRACTICE.edgeMarginMm;
+  // Ursprung der rechten Innenfläche im Buch-Koordinatensystem.
+  const rightOrigin = p.base.widthMm + p.base.spineWidthMm;
 
   // 1. Rohe Modulmaße je Zeile
   const raw = p.rows.map((row) => {
@@ -215,21 +235,27 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
   const totalHeight = raw.reduce((acc, r) => acc + r.height, 0);
   const overflowH = Math.max(0, totalHeight - availH);
 
-  // 2. Platzieren
+  // 2. Platzieren — zwei x-Cursor, je Seite einer.
   let y = PRACTICE.edgeMarginMm;
   const placedRows: PlacedRow[] = [];
   const placedModules: PlacedModule[] = [];
 
   for (const r of raw) {
-    let x = PRACTICE.edgeMarginMm;
     const othersH = totalHeight - r.height;
     const rowRoom = Math.max(0, availH - othersH);
 
-    const usedInRow = r.dims.reduce((acc, d) => acc + d.dim.w, 0);
+    // Belegte Breite je Seite (Budgetregel gilt pro Innenfläche, nicht über den Falz).
+    const usedLeft = r.dims.filter((d) => d.inst.side !== 'right').reduce((a, d) => a + d.dim.w, 0);
+    const usedRight = r.dims.filter((d) => d.inst.side === 'right').reduce((a, d) => a + d.dim.w, 0);
+
+    let xLeft = PRACTICE.edgeMarginMm;
+    let xRight = rightOrigin + PRACTICE.edgeMarginMm;
 
     for (const { inst, dim } of r.dims) {
       const def = moduleDef(inst.typeId);
-      const free = Math.max(0, availW - (usedInRow - dim.w));
+      const isRight = inst.side === 'right';
+      const usedSide = isRight ? usedRight : usedLeft;
+      const free = Math.max(0, availW - (usedSide - dim.w));
       // Gedrehte Module prüfen gegen ihren GEDREHTEN Platzbedarf. Sonst meldet das
       // Regelwerk einen Platzmangel, der durch die Drehung gar nicht entsteht —
       // und verschweigt den vertikalen, den sie erzeugt (Nadelkanal um 90°).
@@ -240,6 +266,7 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
       const checkCtx = checkContext(p, swap, free, rowRoom);
       // Parameter auf den verfügbaren Raum begrenzen ist NICHT Aufgabe des Layouts —
       // das ist die Aufgabe der UI. Hier wird nur ehrlich platziert und gemeldet.
+      const x = isRight ? xRight : xLeft;
       const rectPlaced = rect(x, y, dim.w, dim.h);
 
       // Gezeichnet wird in den UNGEDREHTEN Maßen; die Drehung sitzt als
@@ -261,7 +288,8 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
       });
 
       findings.push(...def.validate(inst.params, checkCtx, inst.id));
-      x += dim.w;
+      if (isRight) xRight += dim.w;
+      else xLeft += dim.w;
     }
 
     // Modul, das höher ist als seine Zeile: Überlappung mit der nächsten Zeile.
@@ -283,7 +311,9 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
       });
     }
 
-    const usedMm = mm(x === PRACTICE.edgeMarginMm ? 0 : x - PRACTICE.edgeMarginMm);
+    // usedMm = die beanspruchendere Seite (kompatibel mit Verbrauchern, die einen
+    // Kennwert erwarten). fillPct entsprechend das Maximum.
+    const usedMm = mm(Math.max(usedLeft, usedRight));
     const fillPct = availW > 0 ? Math.round((usedMm / availW) * 100) : 0;
     placedRows.push({
       id: r.row.id,
@@ -291,29 +321,40 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
       rect: rect(PRACTICE.edgeMarginMm, y, availW, Math.max(r.height, 1)),
       fillPct,
       usedMm,
+      usedLeft: mm(usedLeft),
+      usedRight: mm(usedRight),
     });
     y += r.height;
   }
 
-  // 3. Globale Regeln
+  // 3. Globale Regeln — Kanalüberlauf PRO SEITE (V-G-01)
   const flapW = p.base.widthMm;
   const flapH = p.base.heightMm;
 
   for (const r of placedRows) {
-    if (r.usedMm > availW) {
-      findings.push({
-        ruleId: 'V-G-01',
-        severity: 'error',
-        subject: { kind: 'panel' },
-        values: {
-          zeile: r.name,
-          belegt: Math.round(r.usedMm),
-          verfuegbar: Math.round(availW),
-          fehlt: Math.round(r.usedMm - availW),
-        },
-        fix: { kind: 'widenBase', toMm: Math.round(flapW + (r.usedMm - availW)) },
-        dismissible: false,
-      });
+    // Jede Seite muss für sich in availW passen. Ein Überlauf links und rechts
+    // sind zwei unabhängige Probleme — aber derselbe Zeilenname, deshalb werden
+    // sie zu einem Befund je Seite verdichtet (nicht still zusammengelegt).
+    for (const [sideLabel, usedSide] of [
+      ['links', r.usedLeft],
+      ['rechts', r.usedRight],
+    ] as const) {
+      if (usedSide > availW) {
+        findings.push({
+          ruleId: 'V-G-01',
+          severity: 'error',
+          subject: { kind: 'panel' },
+          values: {
+            zeile: r.name,
+            seite: sideLabel,
+            belegt: Math.round(usedSide),
+            verfuegbar: Math.round(availW),
+            fehlt: Math.round(usedSide - availW),
+          },
+          fix: { kind: 'widenBase', toMm: Math.round(flapW + (usedSide - availW)) },
+          dismissible: false,
+        });
+      }
     }
   }
 
@@ -879,6 +920,8 @@ export function construct(p: Project): Construction {
   );
 
   const flap = rect(0, 0, p.base.widthMm, p.base.heightMm);
+  // Das volle aufgeschlagene Mäppchen: linker Flap + Bund + rechter Flap.
+  const book = rect(0, 0, 2 * p.base.widthMm + p.base.spineWidthMm, p.base.heightMm);
   const fabricAreaM2 =
     pieces.filter((x) => x.kind === 'cut' && (x.material === 'fabric' || x.material === 'lining')).reduce((a, x) => a + (x.w * x.h * x.count) / 1e6, 0);
   const seamLengthMm = pieces.filter((x) => x.kind === 'cut').reduce((a, x) => a + 2 * (x.w + x.h) * x.count, 0);
@@ -900,6 +943,7 @@ export function construct(p: Project): Construction {
           .sort()
           .map((k) => [k, m.params[k]]),
         rotation: m.rotation,
+        side: m.side,
       }))
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
     settings: p.settings,
@@ -909,6 +953,7 @@ export function construct(p: Project): Construction {
     projectHash: hashString(hashInput),
     practiceVersion: PRACTICE.version,
     flap,
+    book,
     rows,
     modules,
     pieces,

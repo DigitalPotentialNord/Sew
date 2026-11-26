@@ -1,12 +1,28 @@
+/**
+ * Visuelle Modulbibliothek — Kategorien + echte Geometrie-Vorschauen.
+ *
+ * Keine abstrakten Icons als einzige Orientierung: jede Karte zeigt das Modul
+ * so, wie es auf der Stofffläche erscheint (die Vorschau IST die `draw()`-Geometrie).
+ * Klicken fügt hinzu (primärer Weg); Drag & Drop ist die zusätzliche Möglichkeit.
+ */
 import { useMemo, useState, type DragEvent } from 'react';
 import { MODULES, moduleDef, moduleOrDefaults } from '../core/modules';
-import type { ModuleCategory, ModuleTypeId } from '../core/types';
+import { mm } from '../core/geometry';
+import type { LayoutContext, ModuleCategory, ModuleTypeId, Prim } from '../core/types';
 import { useStore } from '../state/store';
 import { t } from '../i18n/de';
-import { Icon, ModuleIcon } from './icons';
-import { Button } from './parts/primitives';
+import { Icon } from './icons';
 
 const CATEGORIES: ModuleCategory[] = ['taschen', 'faecher', 'nadeln', 'elastik', 'verschluss', 'schmuck', 'werkzeug', 'struktur'];
+
+const PREVIEW_CTX: LayoutContext = {
+  channelFreeMm: mm(400),
+  panelWidthMm: mm(280),
+  panelHeightMm: mm(300),
+  rowHeightMm: mm(280),
+  seamAllowanceMm: mm(10),
+  fabricWidthMm: mm(1400),
+};
 
 export function Library(): JSX.Element {
   const [q, setQ] = useState('');
@@ -42,31 +58,25 @@ export function Library(): JSX.Element {
       <div className="search-wrap">
         <div className="search">
           <Icon name="search" size={13} />
-          <input
-            type="search"
-            placeholder={t('lib.search')}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label={t('lib.search')}
-          />
-          {q ? <Button icon="close" size="sm" onClick={() => setQ('')} title="Suche löschen" /> : null}
+          <input type="search" placeholder={t('lib.search')} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t('lib.search')} />
+          {q ? (
+            <button className="btn icon sm" onClick={() => setQ('')} aria-label="Suche löschen">
+              <Icon name="close" size={13} />
+            </button>
+          ) : null}
         </div>
       </div>
-      <div className="cats">
-        <button className="chip" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>
-          {t('lib.all')}
-        </button>
+      <div className="lib-cats" role="tablist" aria-label={t('lib.catLabel')}>
+        <button className="lib-cat" role="tab" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>{t('lib.all')}</button>
         {CATEGORIES.map((c) => (
-          <button key={c} className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>
-            {t(`lib.cat.${c}`)}
-          </button>
+          <button key={c} className="lib-cat" role="tab" aria-pressed={cat === c} onClick={() => setCat(c)}>{t(`lib.cat.${c}`)}</button>
         ))}
       </div>
       <div className="pane-body">
         <div className="lib-list">
           {items.map((m) => {
-            const params = moduleOrDefaults(m.id);
             const def = moduleDef(m.id);
+            const params = moduleOrDefaults(m.id);
             return (
               <div
                 key={m.id}
@@ -82,18 +92,19 @@ export function Library(): JSX.Element {
                 }}
                 role="button"
                 tabIndex={0}
-                title={`${t(def.nameKey)} — ${t('lib.drag')}`}
+                title={`${t(def.nameKey)} — ${t('lib.dragAlt')}`}
                 data-module-id={m.id}
               >
-                <span className="lib-icon">
-                  <ModuleIcon icon={m.icon} size={15} />
+                <span className="lib-card-preview" aria-hidden="true">
+                  <ModulePreview typeId={m.id} />
                 </span>
                 <span className="lib-text">
                   <span className="lib-name">{t(m.nameKey)}</span>
                   <span className="lib-sub">{m.summary(params)}</span>
-                </span>
-                <span className="lib-add" aria-hidden="true">
-                  <Icon name="plus" size={13} />
+                  <span className="lib-card-add">
+                    <Icon name="plus" size={11} />
+                    {t('lib.clickToAdd')}
+                  </span>
                 </span>
               </div>
             );
@@ -113,4 +124,58 @@ export function Library(): JSX.Element {
       </div>
     </>
   );
+}
+
+/** Vorschau aus echter Geometrie: `draw()` mit Defaults, in einem SVG viewBox=0..w,0..h. */
+function ModulePreview({ typeId }: { typeId: ModuleTypeId }): JSX.Element {
+  const def = moduleDef(typeId);
+  const params = moduleOrDefaults(typeId);
+  const w = Math.max(1, def.width(params, PREVIEW_CTX));
+  const h = Math.max(1, def.height(params, PREVIEW_CTX));
+  // Vorschau-Box: 64×46 px, Modulgeometrie eingepasst (Aspect erhalten).
+  const boxW = 64;
+  const boxH = 46;
+  const s = Math.min((boxW - 8) / w, (boxH - 8) / h);
+  const dw = w * s;
+  const dh = h * s;
+  const ox = (boxW - dw) / 2;
+  const oy = (boxH - dh) / 2;
+  const prims = def.draw(params, w, h);
+  return (
+    <svg width={boxW} height={boxH} viewBox={`0 0 ${boxW} ${boxH}`}>
+      <rect x={ox} y={oy} width={dw} height={dh} rx={1.5} className="mod-shape" />
+      <g transform={`translate(${ox},${oy}) scale(${s})`}>
+        {prims.map((p, i) => renderPrim(p, i))}
+      </g>
+    </svg>
+  );
+}
+
+function renderPrim(p: Prim, i: number): JSX.Element | null {
+  switch (p.t) {
+    case 'line':
+      return (
+        <line
+          key={i}
+          x1={p.x1}
+          y1={p.y1}
+          x2={p.x2}
+          y2={p.y2}
+          className={p.style === 'seam' ? 'seam-line' : p.style === 'divide' ? 'divide-line' : p.style === 'zip' ? 'zip-line' : p.style === 'fold' ? 'fold-line' : p.style === 'mark' ? 'mark-line' : 'guide-line'}
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+    case 'rect': {
+      const cls = p.style === 'pocket' ? 'pocket-fill' : p.style === 'padding' ? 'padding-fill' : p.style === 'shadow' ? 'shadow-fill' : 'hatch-fill';
+      return <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} className={cls} />;
+    }
+    case 'circle': {
+      const cls = p.style === 'ring' ? 'ring-fill' : p.style === 'button' ? 'button-fill' : p.style === 'snap' ? 'snap-fill' : 'hole-fill';
+      return <circle key={i} cx={p.cx} cy={p.cy} r={p.r} className={cls} />;
+    }
+    case 'text':
+      return null; // Vorschau ohne Maßtext — die Karte nennt das Maß eh im Untertitel.
+    default:
+      return null;
+  }
 }

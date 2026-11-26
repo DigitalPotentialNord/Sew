@@ -10,11 +10,25 @@ import { readFile } from 'node:fs/promises';
 
 const tab = (page: Page, label: string) => page.getByRole('tab', { name: new RegExp(label) });
 
+/**
+ * Beim Erstsbesuch (kein gespeichertes Projekt) öffnet sich die Starter-
+ * Begrüßung. Sie überlagert den Editor — hier übersprungen, damit der Test
+ * deterministisch im Editor landet (mit der schmuck-Vorlage als Hintergrund).
+ */
+async function dismissStarterIfPresent(page: Page): Promise<void> {
+  const start = page.locator('.start-overlay');
+  if (await start.count() > 0) {
+    await start.getByRole('button', { name: /Editor öffnen/ }).first().click();
+    await expect(start).toHaveCount(0);
+  }
+}
+
 async function loadSchmuck(page: Page): Promise<void> {
   await page.goto('/');
+  await dismissStarterIfPresent(page);
   await tab(page, 'Projekt').click();
   await page.getByRole('button', { name: /Schmuck-Organizer/ }).first().click();
-  await tab(page, 'Editor').click();
+  await tab(page, 'Designen').click();
   await expect(page.locator('.canvas-svg')).toBeVisible();
 }
 
@@ -32,6 +46,7 @@ test.describe('1 — Start und Vorlage', () => {
 
     await page.goto('/');
     await expect(page.locator('.topbar')).toBeVisible();
+    await dismissStarterIfPresent(page);
     await tab(page, 'Projekt').click();
 
     const cards = page.locator('.template-card');
@@ -41,7 +56,7 @@ test.describe('1 — Start und Vorlage', () => {
     }
 
     await page.getByRole('button', { name: /Schmuck-Organizer/ }).first().click();
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await expect(page.locator('.canvas-svg g.mod')).toHaveCount(5);
     expect(errors, errors.join('\n')).toEqual([]);
   });
@@ -49,6 +64,7 @@ test.describe('1 — Start und Vorlage', () => {
   test('jede Vorlage rendert ohne Fehler-Findings', async ({ page }) => {
     for (const name of ['Schmuck-Organizer', 'Make-up-Organizer', 'Stricknadel-Organizer']) {
       await page.goto('/');
+      await dismissStarterIfPresent(page);
       await tab(page, 'Projekt').click();
       await page.getByRole('button', { name: new RegExp(name) }).first().click();
       // Die Statusleiste nennt die Fehlerzahl; Vorlagen müssen 0 haben.
@@ -145,11 +161,11 @@ test.describe('2 — Modul hinzufügen, verschieben, konfigurieren', () => {
 test.describe('3 — Live-Neuberechnung über alle Ansichten', () => {
   test('Materialliste reagiert auf ein neues Modul', async ({ page }) => {
     await loadSchmuck(page);
-    await tab(page, 'Material').click();
+    await tab(page, 'Materialien').click();
     const rowsBefore = await page.locator('table tbody tr').count();
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await page.locator('.lib-item[data-module-id="M06"]').first().click();
-    await tab(page, 'Material').click();
+    await tab(page, 'Materialien').click();
     await expect.poll(async () => page.locator('table tbody tr').count()).toBeGreaterThan(0);
     expect(rowsBefore).toBeGreaterThan(0);
     // Der Nadelkanal bringt Einlage/Verstärkung mit — die Materialliste wächst
@@ -162,7 +178,7 @@ test.describe('3 — Live-Neuberechnung über alle Ansichten', () => {
     await loadSchmuck(page);
     await tab(page, 'Schnittmuster').click();
     const before = await page.locator('.piece-card').count();
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await page.locator('.lib-item[data-module-id="M01"]').first().click();
     await tab(page, 'Schnittmuster').click();
     await expect.poll(async () => page.locator('.piece-card').count()).toBeGreaterThan(before);
@@ -209,7 +225,9 @@ test.describe('4 — Regelwerk und Warnungen', () => {
     await page.getByRole('button', { name: /Warnungen/i }).first().click();
     const pane = page.locator('.pane.right');
     await expect(pane).toContainText(/verbreitern/);
-    const flapWidth = () => page.locator('.canvas-svg .flap-outline').getAttribute('width');
+    // Die Außenkante der linken Innenfläche (.atelier-edge) hat die Breite der
+    // Grundfläche — sie wächst mit dem widenBase-Fix eins zu eins mit.
+    const flapWidth = () => page.locator('.canvas-svg .atelier-edge').first().getAttribute('width');
     const before = Number(await flapWidth());
     expect(before).toBe(240);
 
@@ -418,7 +436,7 @@ test.describe('10 — Ungespeicherte Änderungen (Schutz vor Datenverlust)', () 
     // Arbeit ist noch da: Name bleibt, Modulanzahl bleibt
     await expect(bar).toBeHidden();
     await expect(page.locator('.topbar .project-name')).toHaveValue('Schmuck-Organizer');
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await expect(page.locator('.canvas-svg g.mod')).toHaveCount(6);
   });
 

@@ -199,7 +199,7 @@ describe('Store: Import/Export und Findings', () => {
   it('exportProject liefert ein schema-valides Projekt-Datei-Objekt', () => {
     const out = useStore.getState().exportProject() as { format: string; schemaVersion: number; project: unknown };
     expect(out.format).toBe('organizer-studio/project');
-    expect(out.schemaVersion).toBe(2);
+    expect(out.schemaVersion).toBe(3);
   });
 });
 

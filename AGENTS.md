@@ -352,7 +352,7 @@ Behauptung „sieht gut aus“ überprüfbar bleibt.
 | `playwright test` | 30 Tests |
 | `npm run build` | OK, Editor-Chunk ≈ 425 kB |
 | Vorlagen | je 0 Fehler / 0 Warnungen |
-| Hashes (Referenz) | schmuck `536766d8`, makeup `dc2a59aa`, strick `5ed64ba1` |
+| Hashes (Referenz) | schmuck `6443f47e`, makeup `a712eb1e`, strick `1a7e23ff` |
 
 Wenn ein Test rot ist, ist **der Test nicht das Problem**, bis das Gegenteil
 bewiesen ist. Besonders bei Determinismus- und Vorlagen-Tests: erst die Ursache

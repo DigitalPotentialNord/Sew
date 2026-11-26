@@ -19,6 +19,8 @@ export const instanceSchema = z.object({
   params: paramsSchema,
   rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
   locked: z.boolean(),
+  // v3: Innenfläche. Fehlt das Feld (altes Projekt), setzt die Migration 'left'.
+  side: z.union([z.literal('left'), z.literal('right')]).default('left'),
 });
 
 export const projectSchema = z.object({
@@ -106,6 +108,18 @@ export function migrate(raw: unknown): unknown {
       : [];
     p = { ...p, schemaVersion: 2, rows, modules: mods };
   }
+  if (version < 3) {
+    // v2 → v3: jedes Modul erhält eine Innenfläche (`side`). Nicht-destruktiv:
+    // alle bisherigen Module landen auf 'left' — das Projekt sieht danach genauso
+    // aus wie vorher. Siehe docs/architecture/positioning-model-decision.md.
+    const mods = Array.isArray(p.modules)
+      ? (p.modules as Record<string, unknown>[]).map((m) => ({
+          side: 'left',
+          ...m,
+        }))
+      : [];
+    p = { ...p, schemaVersion: 3, modules: mods };
+  }
   return { ...(file.project ? file : {}), ...p, schemaVersion: SCHEMA_VERSION } as unknown as Project;
 }
 
@@ -157,6 +171,7 @@ export function makeInstance(typeId: ModuleTypeId, rowId: string, overrides: Par
     params: { ...def.defaults, ...overrides } as Params,
     rotation: 0,
     locked: false,
+    side: 'left',
   };
 }
 
@@ -205,6 +220,21 @@ export function moveInstance(p: Project, id: string, rowId: string, index: numbe
   const modules = [...rest];
   modules.splice(insertAt, 0, { ...src, rowId });
   return { ...p, modules, updatedAt: nowIso() };
+}
+
+/**
+ * Verschiebt ein Modul auf die andere Innenfläche (v3). Echte Modelländerung —
+ * kein optischer Trick: das Schnittteil wird fortan auf der anderen Fläche genäht.
+ * Die Zeile bleibt; nur `side` wechselt.
+ */
+export function moveToSide(p: Project, id: string, side: 'left' | 'right'): Project {
+  const src = p.modules.find((m) => m.id === id);
+  if (!src || src.side === side) return p;
+  return {
+    ...p,
+    updatedAt: nowIso(),
+    modules: p.modules.map((m) => (m.id === id ? { ...m, side } : m)),
+  };
 }
 
 export function addRow(p: Project): Project {
@@ -334,13 +364,14 @@ interface TemplateDef {
   readonly build: () => Project;
 }
 
-const mk = (typeId: ModuleTypeId, rowId: string, params: Params): Instance => ({
+const mk = (typeId: ModuleTypeId, rowId: string, params: Params, side: 'left' | 'right' = 'left'): Instance => ({
   id: newId('m'),
   typeId,
   rowId,
   params,
   rotation: 0,
   locked: false,
+  side,
 });
 
 const base = (w: number, h: number, spine: number, radius: number): ProjectBase => ({

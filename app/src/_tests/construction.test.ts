@@ -491,7 +491,7 @@ describe('Projektschema und Migration', () => {
     }
   });
 
-  it('v1-Projekt wird auf v2 migriert (rows + rotation)', () => {
+  it('v1-Projekt wird bis v3 migriert (rows + rotation + side)', () => {
     const legacy = {
       schemaVersion: 1,
       id: 'p_old',
@@ -504,12 +504,14 @@ describe('Projektschema und Migration', () => {
       settings: { seamAllowanceMm: 10, fabricWidthMm: 1400, unit: 'mm' },
     };
     const migrated = migrate(legacy) as Record<string, unknown>;
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
     const res = validateProject(migrated);
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.project.modules[0]!.rowId).toBe('r1');
       expect(res.project.modules[0]!.rotation).toBe(0);
+      // v3: jedes migrierte Modul landet nicht-destruktiv auf der linken Innenfläche.
+      expect(res.project.modules[0]!.side).toBe('left');
     }
   });
 
@@ -540,6 +542,7 @@ describe('Unabhängigkeit von der Umgebung', () => {
               .sort()
               .map((k) => [k, m.params[k]]),
             rotation: m.rotation,
+            side: m.side,
           }))
           .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
         settings: p.settings,

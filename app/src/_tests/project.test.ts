@@ -48,8 +48,8 @@ beforeEach(() => {
 });
 
 describe('Schematreue (FR-70, I5)', () => {
-  it('SCHEMA_VERSION ist 2', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+  it('SCHEMA_VERSION ist 3', () => {
+    expect(SCHEMA_VERSION).toBe(3);
   });
 
   it('jede Vorlage trägt die aktuelle Schemaversion', () => {
@@ -180,12 +180,14 @@ describe('Migration (I5)', () => {
     settings: { seamAllowanceMm: 10, fabricWidthMm: 1400, unit: 'mm' },
   };
 
-  it('v1 → v2 ergänzt Zeile, rotation, locked', () => {
+  it('v1 → v3 ergänzt Zeile, rotation, locked, side', () => {
     const m = migrate(v1) as Project;
-    expect(m.schemaVersion).toBe(2);
+    expect(m.schemaVersion).toBe(3);
     expect(m.rows).toHaveLength(1);
     expect(m.modules.every((x) => x.rowId === 'r1')).toBe(true);
     expect(m.modules.every((x) => x.rotation === 0 && x.locked === false)).toBe(true);
+    // v3: migrierte Module erhalten nicht-destruktiv die linke Innenfläche.
+    expect(m.modules.every((x) => x.side === 'left')).toBe(true);
   });
 
   it('migriertes v1-Projekt validiert und konstruiert', () => {

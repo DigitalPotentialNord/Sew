@@ -1,4 +1,16 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+
+/** Reaktiv: ist die Ansicht aktuell ≤ 1000 px (Tablet/Smartphone)? */
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1000px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1000px)');
+    const on = (): void => setMobile(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return mobile;
+}
 import { buildPrintHtml, downloadText, fileName, tilePiece, toSvg, type PrintStrings } from '../core/export';
 import { buildPdf } from '../core/pdf';
 import { useStore } from '../state/store';
@@ -13,6 +25,7 @@ import { MaterialsView } from './MaterialsView';
 import { PatternView } from './PatternView';
 import { InstructionsView } from './InstructionsView';
 import { ProjectView } from './ProjectView';
+import { StartScreen } from './StartScreen';
 import { Icon } from './icons';
 import { Button, Sheet } from './parts/primitives';
 
@@ -28,6 +41,7 @@ export function App(): JSX.Element {
 
   const errors = c.findings.filter((f) => f.severity === 'error').length;
   const warns = c.findings.filter((f) => f.severity === 'warn').length;
+  const startOpen = useStore((s) => s.session.startOpen);
 
   // Tastatur-Kürzel
   const undo = useStore((s) => s.undo);
@@ -57,6 +71,11 @@ export function App(): JSX.Element {
         remove(selection);
       } else if (e.key === 'Escape') {
         useStore.getState().select([]);
+      } else if (e.key.toLowerCase() === 'r' && selection.length === 1) {
+        // Drehen als zusätzlicher Kurzbefehl bei Einzelwahl — visuell auffindbar
+        // bleibt der Drehen-Knopf in der Kontextleiste/Eigenschaften.
+        e.preventDefault();
+        useStore.getState().rotate(selection[0]!);
       } else if (e.key === '1') setView('editor');
       else if (e.key === '2') setView('pattern');
       else if (e.key === '3') setView('materials');
@@ -72,6 +91,7 @@ export function App(): JSX.Element {
       <div className="app">
         <Topbar view={view} setView={setView} errors={errors} warns={warns} saved={saved} />
         <Tabbar view={view} setView={setView} errors={errors} warns={warns} modules={project.modules.length} pieces={c.metrics.cutPieceCount} />
+        {startOpen ? <StartScreen /> : null}
         <main className={`workspace${view === 'editor' ? '' : ' full'}`}>
           {view === 'editor' ? <EditorWorkspace /> : null}
           {view === 'pattern' ? <PatternHost /> : null}
@@ -265,11 +285,11 @@ function Tabbar({
   pieces: number;
 }): JSX.Element {
   const items: { id: View; label: string; icon: 'sliders' | 'scissors' | 'spool' | 'list' | 'folder'; count?: string | number }[] = [
-    { id: 'editor', label: t('top.tab.editor'), icon: 'sliders' },
-    { id: 'pattern', label: t('top.tab.pattern'), icon: 'scissors', count: pieces },
-    { id: 'materials', label: t('top.tab.materials'), icon: 'spool' },
-    { id: 'instructions', label: t('top.tab.instructions'), icon: 'list' },
-    { id: 'project', label: t('top.tab.project'), icon: 'folder' },
+    { id: 'editor', label: t('nav.design'), icon: 'sliders' },
+    { id: 'pattern', label: t('nav.pattern'), icon: 'scissors', count: pieces },
+    { id: 'materials', label: t('nav.material'), icon: 'spool' },
+    { id: 'instructions', label: t('nav.instructions'), icon: 'list' },
+    { id: 'project', label: t('nav.project'), icon: 'folder' },
   ];
   return (
     <nav className="tabbar" role="tablist" aria-label="Ansicht">
@@ -305,6 +325,8 @@ function EditorWorkspace(): JSX.Element {
   const warnOpen = useStore((s) => s.session.warnOpen);
   const setWarnOpen = useStore((s) => s.setWarnOpen);
   const selection = useStore((s) => s.session.selection);
+  const select = useStore((s) => s.select);
+  const isMobile = useIsMobile();
 
   return (
     <>
@@ -334,6 +356,22 @@ function EditorWorkspace(): JSX.Element {
         <Sheet title={t('warn.title')} onClose={() => setWarnOpen(false)}>
           <Warnings />
         </Sheet>
+      ) : null}
+
+      {/* Tablet/Smartphone: Eigenschaften als rechter Drawer, sobald etwas gewählt ist. */}
+      {isMobile && selection.length > 0 ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => select([])} aria-hidden="true" />
+          <div className="props-drawer" role="dialog" aria-modal="false" aria-label={t('mobile.props')}>
+            <div className="sheet-head">
+              <h3>{t('mobile.props')}</h3>
+              <Button icon="close" onClick={() => select([])} ariaLabel={t('mobile.close')} />
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <Properties />
+            </div>
+          </div>
+        </>
       ) : null}
     </>
   );
