@@ -50,12 +50,12 @@ Browser; Projekte liegen im `localStorage`, Exporte sind Dateien.
 
 | Befehl | Zweck |
 | --- | --- |
-| `npm run dev` | Dev-Server auf `0.0.0.0:5173` |
+| `npm run dev` | Dev-Server auf `0.0.0.0:5173` (bewusst: Arena-Live-Preview braucht fremde Hosts; lokal nur Loopback → `npx vite --host 127.0.0.1`) |
 | `npm run build` | Typen prüfen + Produktionsbuild nach `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint 9 (flat config) |
-| `npm test` | 193 Unit-Tests (Vitest, `src/_tests/`) |
-| `npm run e2e` | 27 Abnahmetests (Playwright, `tests/`) |
+| `npm test` | 228 Unit-Tests (Vitest, `src/_tests/`) |
+| `npm run e2e` | 30 Abnahmetests (Playwright, `tests/`) |
 | `npm run check` | typecheck + lint + test — **vor jedem Commit** |
 
 Voraussetzungen: Node ≥ 20, kein weiteres Tooling. Für die E2E-Tests einmalig
@@ -85,14 +85,14 @@ app/
 │   │   └── project.ts       Zod-Schema, Migration, localStorage, Vorlagen
 │   ├── state/store.ts   ← Zustand: Projekt (undo-fähig) getrennt von Session (flüchtig)
 │   ├── ui/              ← React: 5 Ansichten + Canvas + Panels
-│   └── i18n/de.ts       ← alle sichtbaren Texte (Deutsch), 527 Schlüssel
+│   └── i18n/de.ts       ← alle sichtbaren Texte (Deutsch), 535 Schlüssel
 ├── tests/acceptance.spec.ts   ← die Abnahmekriterien aus `docs/product/prd.md`, als Playwright-Test
 └── docs-shots/                ← Screenshots des laufenden Editors + Beispiel-PDF
 ```
 
 **Die eine Regel, die den ganzen Aufbau erklärt:** `src/core/` kennt weder React
 noch `localStorage` noch `Date.now()`. Der Kern ist eine Funktion
-`Project → Construction`. Deshalb ist er in Node testbar (193 Tests laufen in
+`Project → Construction`. Deshalb ist er in Node testbar (228 Tests laufen in
 ~2 s), deterministisch und für ein zweites Frontend wiederverwendbar.
 
 ---
@@ -226,8 +226,8 @@ Tests und Hashes hängen daran).
 | --- | --- |
 | `npx tsc --noEmit` | 0 Fehler (strict, `noUncheckedIndexedAccess`) |
 | `npx eslint src` | 0 Fehler (u. a. `no-explicit-any` verboten) |
-| `npx vitest run` | **193 Tests** in 5 Dateien |
-| `npx playwright test` | **27 Tests** (Abnahmekriterien aus `docs/product/prd.md`) |
+| `npx vitest run` | **228 Tests** in 8 Dateien |
+| `npx playwright test` | **30 Tests** (Abnahmekriterien aus `docs/product/prd.md`) |
 | `npm run build` | OK · Editor 388 kB (gzip 111 kB) · PDF separat 428 kB |
 
 Die Zahlen sind nachprüfbar; sie stehen als Prüfblock auch in `AGENTS.md` und

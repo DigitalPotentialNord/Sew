@@ -369,11 +369,11 @@ schlechter im Ergebnis.
 
 ```text
 Runtime      Browser (ES2022), kein Server
-Build        Vite 5+ · TypeScript 5.x strict
-UI           React 18 · Tailwind CSS · eigenes SVG-Canvas · eigenes Pointer-Modell
+Build        Vite 8 · TypeScript 5.6 (strict)
+UI           React 18 · handgeschriebenes CSS (Tokens) · eigenes SVG-Canvas · eigenes Pointer-Modell
 Domain       TypeScript, rein, ohne Framework
 Geometrie    eigenes Paket (mm-Integer), keine Abhängigkeit im MVP
-Validierung  Zod 3
+Validierung  Zod 4
 Persistenz   localStorage (+ URL-Fragment für Teilen)
 Export       SVG (nativ) · PDF (SVG-Druck primär, pdf-lib sekundär) · JSON
 Tests        Vitest · fast-check · Playwright · axe-core

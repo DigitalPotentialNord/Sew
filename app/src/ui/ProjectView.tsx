@@ -17,6 +17,7 @@ export function ProjectView(): JSX.Element {
   const save = useStore((s) => s.save);
   const loadStored = useStore((s) => s.loadStored);
   const removeStored = useStore((s) => s.removeStored);
+  const duplicateStored = useStore((s) => s.duplicateStored);
   const loadTemplate = useStore((s) => s.loadTemplate);
   const newProject = useStore((s) => s.newProject);
   const importProject = useStore((s) => s.importProject);
@@ -30,7 +31,7 @@ export function ProjectView(): JSX.Element {
       const text = await file.text();
       const raw = JSON.parse(text) as unknown;
       const res = importProject(raw);
-      if (!res.ok) toast(`${t('toast.importError')}: ${res.message ?? ''}`, 'error');
+      if (!res.ok && !res.blocked) toast(`${t('toast.importError')}: ${res.message ?? ''}`, 'error');
     } catch {
       toast(t('toast.importError'), 'error');
     }
@@ -96,7 +97,7 @@ export function ProjectView(): JSX.Element {
                 </button>
               );
             })}
-            <button className="template-card" onClick={newProject}>
+            <button className="template-card" onClick={() => newProject()}>
               <div className="template-thumb" style={{ display: 'grid', placeItems: 'center' }}>
                 <Icon name="plus" size={22} />
               </div>
@@ -263,11 +264,7 @@ export function ProjectView(): JSX.Element {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          loadStored(s.id);
-                          setPar((p) => ({ ...p, id: `${p.id}-copy`, name: `${p.name} (Kopie)`, updatedAt: new Date().toISOString() }));
-                          toast(t('toast.duplicated'), 'ok');
-                        }}
+                        onClick={() => duplicateStored(s.id)}
                       >
                         {t('proj.duplicate')}
                       </Button>{' '}

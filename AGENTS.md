@@ -18,20 +18,37 @@ Zuerst lesen: **Abschnitt 1 (Was ist das)**, **Abschnitt 3 (Regeln)**,
 cd app
 npm install
 npm run dev                 # http://localhost:5173
-npm run check               # typecheck + lint + 193 Unit-Tests  ← Pflicht vor „fertig“
-PW_NO_SERVER=1 npx playwright test   # 27 Abnahmetests (Dev-Server muss laufen)
+npm run check               # typecheck + lint + 228 Unit-Tests  ← Pflicht vor „fertig“
+PW_NO_SERVER=1 npx playwright test   # 30 Abnahmetests (Dev-Server muss laufen)
 ```
 
 | Fakt | Wert |
 | --- | --- |
 | Was | Browser-Tool, das aus Modulen ein maßhaltiges Näh-Schnittmuster erzeugt |
-| Stack | Vite 5 · React 18 · TypeScript 5.6 (strict) · Zustand 4 · Zod 3 · pdf-lib |
-| Tests | Vitest (193) + Playwright (27) |
+| Stack | Vite 8 · React 18 · TypeScript 5.6 (strict) · Zustand 4 · Zod 4 · pdf-lib |
+| Tests | Vitest (228) + Playwright (30) |
 | Sprache | Oberfläche **deutsch**, Code-Bezeichner **deutsch** (Fachbegriffe) |
 | Backend | keins. `localStorage` + Datei-Exporte |
 | Kern | `app/src/core/`, reine Funktionen: `Project → Construction` |
 | Status | Phase 3: lauffähiger Prototyp mit dokumentierten Lücken |
 | Größte Gefahr | Eine Änderung, die ein *falsches* Schnittmuster erzeugt, ohne dass ein Test rot wird |
+
+---
+
+## 0.1 Dev-Server: warum `0.0.0.0` und `allowedHosts: true`
+
+`vite.config.ts` bindet Dev- und Preview-Server bewusst an `0.0.0.0` mit
+`allowedHosts: true`. Grund: die Arena-Live-Preview proxied den Server über
+einen fremden Hostnamen — mit dem Vite-Default (nur `localhost` erlaubt)
+antwortet der Server mit „Blocked request“. **Kehrseite:** im LAN ist der
+Dev-Server für andere Geräte sichtbar. Wer das nicht will, startet lokal nur
+mit eigenem Loopback:
+
+```bash
+npx vite --host 127.0.0.1 --port 5173
+```
+
+Produktion hängt davon nichts ab — die Seite ist statisch (GitHub Pages).
 
 ---
 
@@ -98,9 +115,9 @@ Deshalb ist der Kern framework-frei, deterministisch und dicht getestet.
     │   └── project.ts         (408) Zod-Schema v2, Migration v1→v2, Storage, 3 Vorlagen
     ├── src/state/store.ts     (419) Zustand: project/past/future + session + toasts
     ├── src/ui/                React-Oberfläche (5 Ansichten, Canvas, Panels, primitives)
-    ├── src/i18n/de.ts         (602 Zeilen, 527 Schlüssel) alle sichtbaren Strings
-    ├── src/_tests/            5 Vitest-Dateien, 193 Tests
-    ├── tests/acceptance.spec.ts    27 Playwright-Tests (Abnahmekriterien aus `docs/product/prd.md`)
+    ├── src/i18n/de.ts         (602 Zeilen, 535 Schlüssel) alle sichtbaren Strings
+    ├── src/_tests/            8 Vitest-Dateien, 228 Tests
+    ├── tests/acceptance.spec.ts    30 Playwright-Tests (Abnahmekriterien aus `docs/product/prd.md`)
     └── docs-shots/            Screenshots des laufenden Editors + Beispiel-PDF
 ```
 
@@ -309,9 +326,9 @@ Eine Änderung ist fertig, wenn **alle** Zeilen grün sind:
 cd app
 npx tsc --noEmit                     # 0 Fehler
 npx eslint src                       # 0 Fehler
-npx vitest run                       # 193 Tests, 5 Dateien
+npx vitest run                       # 228 Tests, 8 Dateien
 npm run dev &                        # Dev-Server für E2E
-PW_NO_SERVER=1 npx playwright test   # 27 Tests
+PW_NO_SERVER=1 npx playwright test   # 30 Tests
 npm run build                        # Build OK
 ```
 
@@ -331,9 +348,9 @@ Behauptung „sieht gut aus“ überprüfbar bleibt.
 | --- | --- |
 | `tsc --noEmit` | 0 Fehler |
 | `eslint src` | 0 Fehler |
-| `vitest run` | 193 Tests / 5 Dateien |
-| `playwright test` | 27 Tests |
-| `npm run build` | OK, Editor-Chunk ≈ 388 kB |
+| `vitest run` | 228 Tests / 8 Dateien |
+| `playwright test` | 30 Tests |
+| `npm run build` | OK, Editor-Chunk ≈ 425 kB |
 | Vorlagen | je 0 Fehler / 0 Warnungen |
 | Hashes (Referenz) | schmuck `536766d8`, makeup `dc2a59aa`, strick `5ed64ba1` |
 

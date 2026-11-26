@@ -156,7 +156,7 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
             variant="outline"
             icon="download"
             onClick={() => {
-              downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify({ format: 'organizer-studio/project', schemaVersion: 2, exportedAt: new Date().toISOString(), appVersion: '0.1.0', project }, null, 2));
+              downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify(useStore.getState().exportProject(), null, 2));
               toast(t('toast.projectExported'), 'ok');
             }}
           >

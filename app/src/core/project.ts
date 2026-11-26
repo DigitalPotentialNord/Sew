@@ -1,3 +1,4 @@
+import { version as appVersion } from '../../package.json';
 /**
  * Projektverwaltung: Schema, Validierung (Zod), Speicherung, Vorlagen.
  * Gespeichert wird nur ABSICHT — nie ein Berechnungsergebnis.
@@ -9,7 +10,7 @@ import { SCHEMA_VERSION, type Instance, type Project, type ProjectBase, type Row
 import type { ModuleTypeId, Params } from './types';
 
 // ─── Zod ─────────────────────────────────────────────────────────────────────
-export const paramsSchema = z.record(z.union([z.number(), z.string(), z.boolean()]));
+export const paramsSchema = z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])); // zod v4: Schlüsselschema explizit
 
 export const instanceSchema = z.object({
   id: z.string().min(1),
@@ -231,7 +232,7 @@ export function toFile(p: Project): ProjectFile {
     format: 'organizer-studio/project',
     schemaVersion: SCHEMA_VERSION,
     exportedAt: nowIso(),
-    appVersion: '0.1.0',
+    appVersion,
     project: p,
   };
 }
@@ -262,7 +263,7 @@ function safeParse<T>(raw: string | null): T | null {
 }
 
 export function loadLibrary(): StoredProject[] {
-  const list = safeParse<unknown[]>(localStorage.getItem(STORE_KEY));
+  const list = safeParse<unknown[]>(safeRead(STORE_KEY));
   if (!Array.isArray(list)) return [];
   const out: StoredProject[] = [];
   for (const item of list) {
@@ -276,10 +277,18 @@ export function loadLibrary(): StoredProject[] {
 }
 
 /**
- * Schreibzugriff kann scheitern (Quota, privater Modus, deaktiviertes Storage).
- * Dann bleibt die App bedienbar und meldet ehrlich „nicht gespeichert“, statt
- * mit einer Exception im Klick-Handler abzustürzen.
+ * Lese-/Schreibzugriff kann scheitern (Quota, privater Modus, per Policy
+ * deaktiviertes Storage). Dann bleibt die App bedienbar und meldet ehrlich
+ * „nicht gespeichert“, statt mit einer Exception im Klick-Handler abzustürzen.
  */
+function safeRead(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 function safeWrite(fn: () => void): boolean {
   try {
     fn();
@@ -301,7 +310,7 @@ export function deleteFromLibrary(id: string): boolean {
 }
 
 export function loadCurrent(): Project | null {
-  const raw = safeParse<unknown>(localStorage.getItem(CURRENT_KEY));
+  const raw = safeParse<unknown>(safeRead(CURRENT_KEY));
   if (!raw) return null;
   const parsed = fromFile(raw);
   return parsed.ok ? parsed.project : null;

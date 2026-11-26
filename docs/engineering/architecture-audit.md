@@ -33,7 +33,8 @@ Build-Artefakte und ein leerer Ordner-Platzhalter waren eingecheckt.
 | PDF-Robustheit | pdf-lib-Crash bei Emoji/CJK im Projektnamen möglich | cp1252-Whitelist `safe()` + Tests |
 
 **Status nach zweiter Prüfrunde (§10):** 193/193 Tests grün, Dead Code entfernt, PDF/cp1252 gehärtet, CI least-privilege, `.gitattributes`/`.editorconfig` ergänzt.
-| Determinismus | Golden-Hashes stabil | **weiterhin 193/193 Tests grün, Hashes unverändert** |
+**Status nach dritter Prüfrunde (§11):** 228/228 Tests grün, Abhängigkeits-Majors aktualisiert (vite 8 · vitest 5 · zod 4), Ungespeicherte-Arbeit-Schutz (F-42) implementiert, Store getestet, CI Node 22 + SHA-Pins + Bundle-Budget + E2E-Job.
+| Determinismus | Golden-Hashes stabil | **228/228 Tests grün, Hashes unverändert (536766d8 · dc2a59aa · 5ed64ba1)** |
 
 **Ampel:** Kern-Architektur 🟢 · Repo-/Release-Infrastruktur 🟢 (nach Fixes) · Supply-Chain
 (npm audit) 🟡 · Lizenz/Branch-Protection 🟠 (Entscheidung offen, s. §6).
@@ -300,3 +301,103 @@ desselben Golden-Hashes (`536766d8` / `dc2a59aa` / `5ed64ba1` — unverändert).
 Kein Browser-Render-Test dieser Runde (Snapshot/Screenshot); optischer
 Regressionsschutz existiert über E2E + `docs-shots/`. Sichtprüfung nach
 Mergen empfohlen.
+
+
+---
+
+## 11. Dritte Prüfrunde (26.11.2026, nachts) — „verbessere alles + vergessene Tests“
+
+Scope: alles Offenstehende aus §10 plus Abhängigkeiten, Bundle-Budget und die
+Tests, die sonst jeder vergisst. Golden-Hashes weiterhin unverändert
+(`536766d8` / `dc2a59aa` / `5ed64ba1`); Vorlagen 0 Fehler / 0 Warnungen.
+
+### Abhängigkeiten (jetzt 0 bekannte Schwachstellen)
+
+| Paket | vorher | jetzt | Grund |
+| --- | --- | --- | --- |
+| `vite` | 5.x | **8.4.0** | Rolldown-basiert; Build ≈ 340 ms |
+| `@vitejs/plugin-react` | 4.x | **6.3.0** | Peer vite ^8 |
+| `vitest` | 2.x | **5.1.2** | Peer vite ^6.4/^7/^8 |
+| `zod` | 3.x | **4.6.7** | Validierung; `z.record` braucht Key-Schema (Umstellung) |
+
+`npm audit` → **0 Vulnerabilities**. Bewusst NICHT angefasst: React 18,
+TypeScript 5.6, Zustand 4, ESLint 9, @playwright/test 1.48 — große Majors,
+deren Nutzen in diesem Repo begrenzt ist und deren Verifikation hier nicht
+vollständig möglich war (s. „Nicht ausgeführt“). Kandidaten für einen separaten,
+gezielten Upgrade-Schritt.
+
+**Vitest 5 braucht Node ≥ 22.12** → CI auf Node 22 angehoben (beide Workflows).
+
+### Neu geschriebene Tests — die sonst jeder vergisst (35 neue → 228 gesamt)
+
+| Datei | Tests | Abdeckung |
+| --- | --- | --- |
+| `src/_tests/store.test.ts` | 16 | Persistenz-Schreibfehler (Quota) ehrlich gemeldet, `loadStored` unbekannte ID, `resetToSaved`-Fallback, Import kaputt/valide, `applyFindingFix` ohne Wirkung/Erfolg, Toast-Timeout, Undo/Redo-Roundtrip, `duplicateStored`-Pfad, Dirty-Guard auf allen fünf ersetzenden Pfaden |
+| `src/_tests/i18n.test.ts` | 6 | **Vertrag Code ↔ Wörterbuch**: jede statische `t('…')`-Referenz existiert; alle von der Engine erzeugten dynamischen Keys (Module, Felder, Options, Stücke, Operationen, Regeln, Extras) sind definiert; `phase.*`/`mat.*` vorhanden; Mut-Check (> 100 statische Refs gefunden) |
+| `src/_tests/fixes.test.ts` | 11 | `findingKey` stabil/formatierbar; `applyFix` klemmt an Schemagrenzen, idempotent, kein `updatedAt` aus dem Kern, No-op bei unbekanntem Modul |
+| `src/_tests/export.test.ts` | +2 | SVG-Escaping gegen Skript-Injection (`toSvg`), strukturelle Wohlgeformtheit |
+
+Zusätzlich gehärtet: `safeRead()` in `core/project.ts` — ein Lese-Fehler im
+`localStorage` (Policy/privater Modus) crashte bisher `loadLibrary()`; jetzt
+tolerant (Test: „Speicherfehler … crasht nicht“).
+
+### F-42 geschlossen: Schutz ungespeicherter Arbeit
+
+Fünf Pfade ersetzen den Editor-Stand (Vorlage, neues Projekt, Import,
+gespeichertes Projekt, Zurücksetzen). Jetzt:
+
+- Store merkt `pendingDiscard`; `isDirty()` ist `past.length > 0`.
+- **Inline-Rückfrage** (`role="alertdialog"`, deutsche Buttons „Verwerfen“/
+  „Abbrechen“, Esc bricht ab, Fokus springt auf „Verwerfen“) im UI — kein
+  `window.confirm` (e2e-kooperativ, tastatur-/screenreader-zugänglich).
+- `importProject` validiert ERST (kaputte Datei → Fehlermeldung, keine
+  Rückfrage), fragt erst danach.
+- `duplicateStored()` dupliziert Bibliotheks-Einträge OHNE Öffnen/Ersetzen —
+  wer dupliziert, verliert nie Arbeit (alter Bug: „Duplizieren“ rief
+  `loadStored()` + `setPar()` uncodiert auf).
+- 3 neue Playwright-Abnahmetests (§10, „Schutz vor Datenverlust“).
+
+### Weitere geschlossene §10-Findings
+
+| ID | Lösung |
+| --- | --- |
+| F-43 | In AGENTS.md (§0.1) + README dokumentiert: warum `0.0.0.0`/`allowedHosts` (Arena-Preview), wie man Loopback-only startet |
+| F-45 | Actions als **Commit-SHAs** gepinnt (`checkout`, `setup-node`, `configure-pages`, `upload-pages-artifact`, `deploy-pages`) + `persist-credentials: false`; `.github/dependabot.yml` (npm wöchentlich, Actions wöchentlich, Gruppierung) |
+| F-46 | `npm run verify:templates` = gezielter Lauf der Template-Invarianten (konstruiert alle Vorlagen, 0 Fehler/0 Warnungen, Hashes) |
+| F-47 | `scripts/check-bundle-size.mjs` (ohne Zusatz-Dependency): schlägt an, wenn Editor-Chunk > 460 kB raw / 140 kB gzip bzw. PDF-Chunk > 460/200 — läuft als `npm run size` und in CI nach dem Build |
+| F-48 | `appVersion` kommt jetzt aus `package.json` (`import { version }`); der hartcodierte `'0.1.0'` in `toFile()` UND in `PatternView.tsx` (dort als Inline-Klon von `toFile()` — jetzt `exportProject()`-Aufruf) ist weg |
+| F-49 | CI hat zweiten Job `e2e` (Playwright, Node 22, Chromium mit Deps); Hinweis: lokal bleibt `npm run e2e` |
+| F-50 | Teilweise: Dependabot + SHA-Pins umgesetzt; LICENSE und Branch-Protection bleiben Repo-Admin-Entscheidungen (s. u.) |
+
+### Bewusst offen (Entscheidungen / externe Faktoren)
+
+| ID | Befund | Stand |
+| --- | --- | --- |
+| F-50 | LICENSE fehlt; Branch-Protection auf `main` liegt bei der Repo-Administration | offen — Entscheidung des Repos |
+| — | React-18→19, TS-5.6→7, Zustand 4→5, ESLint 9→10, Playwright-Major | bewusst nicht jetzt: Nutzen klein, Risiko bzw. Verifikation (E2E) hier nicht vollständig möglich |
+| — | GitHub Pages kann von diesem Agenten nicht aktiviert werden (POST /pages → 403) | Repo-Admin: Settings → Pages → Source: GitHub Actions |
+
+### Nicht ausgeführt in dieser Runde
+
+Playwright-E2E **konnte in dieser Umgebung nicht ausgeführt werden**: die in
+`~/.cache/ms-playwright` abgelegten Browser-Binaries sind nicht persistent
+zwischen Sessions und der Download ist in diesem Sandbox durch die
+Netzwerk-Allowlist blockiert (das CDN für
+Browser-Binaries ist nicht in der Netzwerk-Allowlist; npm/GitHub erlaubt). `npx playwright install chromium` schlägt mit Code 1 fehl. Die E2E-
+Suite (30 Tests inkl. 3 neuer Schutz-Tests) läuft auf jeder Pull-Request-CI
+(Job `e2e`) bzw. lokal mit `npm run e2e`. Bis dort grün: die UI-Änderungen sind
+durch Typecheck/Lint/Build/Unit abgesichert, aber **visuell unverifiziert**.
+
+### Verifizierte Endstände (diese Runde)
+
+```
+npx tsc --noEmit    → 0 Fehler
+npx eslint .        → 0 Fehler
+npx vitest run      → 228 Tests / 8 Dateien grün
+npm run verify:templates → 72 Konstruktionstests grün (Invarianten + Hashes)
+npm run build       → OK · Editor ≈ 425 kB (gzip ≈ 122 kB) · pdf-Chunk ≈ 419 kB (gzip ≈ 175 kB)
+npm run size        → OK (Budgets: index 460/140, pdf 460/200)
+npm audit           → 0 Vulnerabilities
+VITE_BASE_PATH=/Sew/ + vite preview → HTTP 200, Assets unter /Sew/ referenziert
+Golden-Hashes       → unverändert
+```

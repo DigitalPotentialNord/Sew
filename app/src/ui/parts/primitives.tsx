@@ -1,5 +1,5 @@
 /** Wiederverwendbare Bedienelemente. Jedes Element hat echte Funktion — nichts ist Dekoration. */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';
 import { clamp } from '../../core/geometry';
 import { t } from '../../i18n/de';
 import { Icon, type IconName } from '../icons';
@@ -16,9 +16,11 @@ export function Button({
   ariaLabel,
   block,
   type = 'button',
+  ref,
 }: {
   children?: ReactNode;
   onClick?: () => void;
+  ref?: Ref<HTMLButtonElement>;
   variant?: 'ghost' | 'outline' | 'primary' | 'accent' | 'danger';
   size?: 'sm' | 'md';
   icon?: IconName;
@@ -34,6 +36,7 @@ export function Button({
     .join(' ');
   return (
     <button
+      ref={ref}
       type={type}
       className={cls}
       onClick={onClick}

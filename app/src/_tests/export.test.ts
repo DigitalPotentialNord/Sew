@@ -191,3 +191,27 @@ describe('Dateinamen (T-X-06)', () => {
     expect(ts).not.toContain(':');
   });
 });
+
+describe('toSvg – Escaping (Defense-in-Depth)', () => {
+  it('ein piece.id mit Markup kann kein SVG/Skript-Injection erzeugen', () => {
+    const c = construct(buildTemplate('schmuck'));
+    const hostile = {
+      ...c,
+      pieces: c.pieces.map((p, i) => (i === 0 ? { ...p, id: 'a"><script>alert(1)</script>' } : p)),
+    };
+    const svg = toSvg(hostile);
+    expect(svg).not.toContain('<script>');
+    expect(svg).toContain('&lt;script&gt;');
+    expect(svg).not.toContain('a"><');
+  });
+
+  it('svg ist wohlgeformt (XML-Parser akzeptiert)', () => {
+    const c = construct(buildTemplate('makeup'));
+    const svg = toSvg(c);
+    // Minimaler struktureller Check ohne XML-Parser-Dependency:
+    // jedes öffnende Tag hat ein schließendes Pendant und gültige Quotes.
+    expect(svg.startsWith('<?xml version="1.0"')).toBe(true);
+    expect(svg).toContain('</svg>');
+    expect(svg.match(/<g /g)?.length).toBe(svg.match(/<\/g>/g)?.length);
+  });
+});

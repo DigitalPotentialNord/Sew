@@ -524,7 +524,9 @@ export const de = {
   'proj.myProjects': 'Meine Projekte',
   'proj.noProjects': 'Noch nichts gespeichert.',
   'proj.confirmDelete': 'Projekt wirklich löschen?',
-  'proj.startNew': 'Neues leeres Projekt',
+  'proj.discardUnsaved': 'Du hast ungespeicherte Änderungen. Verwerfen?',
+  'proj.discard': 'Verwerfen',
+  'proj.cancel': 'Abbrechen',
   'proj.blank': 'Leeres Etui',
   'proj.blankDesc': 'Fange bei null an: nur die Grundfläche.',
 

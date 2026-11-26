@@ -18,6 +18,7 @@ import {
   loadLibrary,
   makeInstance,
   moveInstance,
+  newId,
   nowIso,
   removeInstance,
   removeRow,
@@ -36,6 +37,19 @@ export interface Toast {
   readonly message: string;
   readonly tone: 'ok' | 'error' | 'info';
 }
+
+/**
+ * Destruktive Aktion, die auf Bestätigung wartet.
+ * `null` = nichts offen. Alle fünf Pfade (Vorlage, neu, Import, gespeichertes
+ * Projekt, Zurücksetzen) ersetzen den Editor-Stand — ungespeicherte Arbeit
+ * darf das nicht stillschweigend vernichten.
+ */
+export type PendingDiscard =
+  | { readonly kind: 'template'; readonly id: TemplateId }
+  | { readonly kind: 'new' }
+  | { readonly kind: 'import'; readonly payload: unknown }
+  | { readonly kind: 'loadStored'; readonly id: string }
+  | { readonly kind: 'reset' };
 
 interface EditorSession {
   readonly selection: readonly string[];
@@ -67,6 +81,8 @@ interface StoreState {
   toasts: Toast[];
   /** Bumped on every project change — memo key. */
   revision: number;
+  /** Destruktive Aktion wartet auf Bestätigung (ungespeicherte Änderungen). */
+  pendingDiscard: PendingDiscard | null;
 
   // Actions
   setPar: (updater: (p: Project) => Project, opts?: { undoable?: boolean }) => void;
@@ -96,15 +112,19 @@ interface StoreState {
   removeRowAction: (rowId: string) => void;
   renameRowAction: (rowId: string, name: string) => void;
   save: () => void;
-  loadStored: (id: string) => void;
+  loadStored: (id: string, opts?: { force?: boolean }) => void;
   removeStored: (id: string) => void;
-  loadTemplate: (id: TemplateId) => void;
-  newProject: () => void;  importProject: (raw: unknown) => { ok: boolean; message?: string };
+  duplicateStored: (id: string) => void;
+  loadTemplate: (id: TemplateId, opts?: { force?: boolean }) => void;
+  newProject: (opts?: { force?: boolean }) => void;
+  importProject: (raw: unknown, opts?: { force?: boolean }) => { ok: boolean; message?: string; blocked?: boolean };
   exportProject: () => unknown;
   refreshLibrary: () => void;
   toast: (message: string, tone?: Toast['tone']) => void;
   dropToast: (id: number) => void;
-  resetToSaved: () => void;
+  resetToSaved: (opts?: { force?: boolean }) => void;
+  confirmPendingDiscard: () => void;
+  cancelPendingDiscard: () => void;
 }
 
 const emptySession: EditorSession = {
@@ -148,6 +168,23 @@ let toastId = 0;
 
 export const useStore = create<StoreState>((set, get) => {
   const project = initialProject();
+  // Konservativ: fragt auch dann, wenn seit dem Sessionbeginn editiert (und danach
+  // gespeichert) wurde — lieber einmal zu viel fragen als Unbezahltes zu löschen.
+  // `past.length > 0` überlebt auch ein zwischenzeitliches Undo nicht: nach beliebig
+  // vielen Undo bleibt die Historie bis zum Laden gefüllt.
+  const isDirty = (): boolean => get().past.length > 0;
+  const applyFreshProject = (p: Project, saved: boolean, keepView = false): void => {
+    saveCurrent(p);
+    set({
+      project: p,
+      past: [],
+      future: [],
+      construction: compute(p),
+      saved,
+      session: keepView ? { ...emptySession, view: get().session.view } : { ...emptySession },
+      revision: get().revision + 1,
+    });
+  };
   return {
     project,
     past: [],
@@ -158,6 +195,7 @@ export const useStore = create<StoreState>((set, get) => {
     saved: false,
     toasts: [],
     revision: 0,
+    pendingDiscard: null,
 
     setPar: (updater, opts) => {
       const prev = get().project;
@@ -306,20 +344,14 @@ export const useStore = create<StoreState>((set, get) => {
       get().toast(t('toast.saved'), 'ok');
     },
 
-    loadStored: (id) => {
+    loadStored: (id, opts) => {
       const item = get().library.find((s) => s.id === id);
       if (!item) return;
-      const p = item.project;
-      saveCurrent(p);
-      set({
-        project: p,
-        past: [],
-        future: [],
-        construction: compute(p),
-        saved: true,
-        session: { ...emptySession, view: get().session.view },
-        revision: get().revision + 1,
-      });
+      if (!opts?.force && isDirty()) {
+        set({ pendingDiscard: { kind: 'loadStored', id } });
+        return;
+      }
+      applyFreshProject(item.project, true, true);
       get().toast(t('toast.projectLoaded'), 'ok');
     },
 
@@ -328,51 +360,54 @@ export const useStore = create<StoreState>((set, get) => {
       set({ library: loadLibrary() });
     },
 
-    loadTemplate: (id) => {
-      const p = buildTemplate(id);
-      saveCurrent(p);
-      set({
-        project: p,
-        past: [],
-        future: [],
-        construction: compute(p),
-        saved: false,
-        session: { ...emptySession },
-        revision: get().revision + 1,
-      });
+    /**
+     * Duplikat in die Bibliothek legen — ohne den Editor zu öffnen und ohne
+     * den aktuellen Stand anzufassen. Rückgängig-sicher per Konstruktion:
+     * es ersetzt nichts.
+     */
+    duplicateStored: (id) => {
+      const item = get().library.find((s) => s.id === id);
+      if (!item) return;
+      const copy: Project = {
+        ...item.project,
+        id: newId('p'),
+        name: `${item.project.name} (Kopie)`,
+        updatedAt: nowIso(),
+      };
+      saveToLibrary(copy);
+      set({ library: loadLibrary() });
+      get().toast(t('toast.duplicated'), 'ok');
+    },
+
+    loadTemplate: (id, opts) => {
+      if (!opts?.force && isDirty()) {
+        set({ pendingDiscard: { kind: 'template', id } });
+        return;
+      }
+      applyFreshProject(buildTemplate(id), false);
       get().toast(t('toast.loaded'), 'ok');
     },
 
-    newProject: () => {
-      const p = blankProject();
-      saveCurrent(p);
-      set({
-        project: p,
-        past: [],
-        future: [],
-        construction: compute(p),
-        saved: false,
-        session: { ...emptySession },
-        revision: get().revision + 1,
-      });
+    newProject: (opts) => {
+      if (!opts?.force && isDirty()) {
+        set({ pendingDiscard: { kind: 'new' } });
+        return;
+      }
+      applyFreshProject(blankProject(), false);
     },
 
-    importProject: (raw) => {
+    importProject: (raw, opts) => {
       const parsed = fromFile(raw);
       if (!parsed.ok) {
         return { ok: false, message: parsed.issues.slice(0, 3).map((i) => `${i.path}: ${i.message}`).join(' · ') };
       }
-      const p = parsed.project;
-      saveCurrent(p);
-      set({
-        project: p,
-        past: [],
-        future: [],
-        construction: compute(p),
-        saved: false,
-        session: { ...emptySession },
-        revision: get().revision + 1,
-      });
+      // Erst validieren — eine kaputte Datei verdient die Fehlermeldung,
+      // nicht den Rückfrage-Dialog.
+      if (!opts?.force && isDirty()) {
+        set({ pendingDiscard: { kind: 'import', payload: raw } });
+        return { ok: false, blocked: true };
+      }
+      applyFreshProject(parsed.project, false);
       get().toast(t('toast.imported'), 'ok');
       return { ok: true };
     },
@@ -392,20 +427,42 @@ export const useStore = create<StoreState>((set, get) => {
 
     dropToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 
-    resetToSaved: () => {
+    confirmPendingDiscard: () => {
+      const pending = get().pendingDiscard;
+      set({ pendingDiscard: null });
+      if (!pending) return;
+      switch (pending.kind) {
+        case 'template':
+          get().loadTemplate(pending.id, { force: true });
+          break;
+        case 'new':
+          get().newProject({ force: true });
+          break;
+        case 'import': {
+          const res = get().importProject(pending.payload, { force: true });
+          if (!res.ok) get().toast(`${t('toast.importError')}: ${res.message ?? ''}`, 'error');
+          break;
+        }
+        case 'loadStored':
+          get().loadStored(pending.id, { force: true });
+          break;
+        case 'reset':
+          get().resetToSaved({ force: true });
+          break;
+      }
+    },
+
+    cancelPendingDiscard: () => set({ pendingDiscard: null }),
+
+    resetToSaved: (opts) => {
+      if (!opts?.force && isDirty()) {
+        set({ pendingDiscard: { kind: 'reset' } });
+        return;
+      }
       const stored = loadCurrent();
       const p = stored ?? buildTemplate('schmuck');
       clearCurrent();
-      saveCurrent(p);
-      set({
-        project: p,
-        past: [],
-        future: [],
-        construction: compute(p),
-        saved: true,
-        session: { ...emptySession },
-        revision: get().revision + 1,
-      });
+      applyFreshProject(p, true);
       get().toast(t('toast.reset'), 'info');
     },
   };

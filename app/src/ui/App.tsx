@@ -80,6 +80,7 @@ export function App(): JSX.Element {
           {view === 'project' ? <ProjectView /> : null}
         </main>
         <Statusbar />
+        <DiscardConfirm />
         <div className="toasts" aria-live="polite">
           {toasts.map((toast) => (
             <ToastItem key={toast.id} id={toast.id} message={toast.message} tone={toast.tone} />
@@ -146,7 +147,7 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
             try {
               const text = await f.text();
               const res = useStore.getState().importProject(JSON.parse(text) as unknown);
-              if (!res.ok) toast(`${t('toast.importError')}: ${res.message ?? ''}`, 'error');
+              if (!res.ok && !res.blocked) toast(`${t('toast.importError')}: ${res.message ?? ''}`, 'error');
             } catch {
               toast(t('toast.importError'), 'error');
             }
@@ -507,6 +508,50 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Rückfrage für destruktive Aktionen mit ungespeicherten Änderungen.
+ * Inline unter der Topbar (kein window.confirm → keyboard-/screenreader-freundlich,
+ * funktioniert in eingebetteten Vorschauen, e2e-steuerbar).
+ */
+function DiscardConfirm(): JSX.Element | null {
+  const pending = useStore((s) => s.pendingDiscard);
+  const confirm = useStore((s) => s.confirmPendingDiscard);
+  const cancel = useStore((s) => s.cancelPendingDiscard);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (pending) confirmRef.current?.focus();
+  }, [pending]);
+
+  useEffect(() => {
+    if (!pending) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') cancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pending, cancel]);
+
+  if (!pending) return null;
+  return (
+    <div className="discard-bar" role="alertdialog" aria-modal="false" aria-label={t('proj.discardUnsaved')}>
+      <span className="discard-icon" aria-hidden="true">
+        <Icon name="alert" size={15} />
+      </span>
+      <span className="discard-text">{t('proj.discardUnsaved')}</span>
+      <span className="discard-actions">
+        <Button ref={confirmRef} size="sm" variant="danger" onClick={confirm}>
+          {t('proj.discard')}
+        </Button>
+        <Button size="sm" variant="outline" onClick={cancel}>
+          {t('proj.cancel')}
+        </Button>
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function ToastItem({ id, message, tone }: { id: number; message: string; tone: 'ok' | 'error' | 'info' }): JSX.Element {
   const drop = useStore((s) => s.dropToast);
   return (
@@ -545,7 +590,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
               <Button
                 variant="outline"
                 onClick={() => {
-                  useStore.getState().resetToSaved();
+                  useStore.getState().resetToSaved({ force: true });
                   this.setState({ error: null });
                 }}
               >

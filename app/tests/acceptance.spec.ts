@@ -402,3 +402,48 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
   });
 });
+
+test.describe('10 — Ungespeicherte Änderungen (Schutz vor Datenverlust)', () => {
+  test('Vorlage-Klick bei ungespeicherten Änderungen fragt nach — Abbrechen behält die Arbeit', async ({ page }) => {
+    await loadSchmuck(page);
+    await page.locator('.lib-item[data-module-id="M01"]').first().click();
+    await expect.poll(() => moduleCount(page)).toBe(6);
+
+    await tab(page, 'Projekt').click();
+    await page.getByRole('button', { name: /Make-up-Organizer/ }).first().click();
+    const bar = page.getByRole('alertdialog');
+    await expect(bar).toBeVisible();
+    await bar.getByRole('button', { name: 'Abbrechen' }).click();
+
+    // Arbeit ist noch da: Name bleibt, Modulanzahl bleibt
+    await expect(bar).toBeHidden();
+    await expect(page.locator('.topbar .project-name')).toHaveValue('Schmuck-Organizer');
+    await tab(page, 'Editor').click();
+    await expect(page.locator('.canvas-svg g.mod')).toHaveCount(6);
+  });
+
+  test('Verwerfen ersetzt den Stand — mit expliziter Bestätigung', async ({ page }) => {
+    await loadSchmuck(page);
+    await page.locator('.lib-item[data-module-id="M01"]').first().click();
+
+    await tab(page, 'Projekt').click();
+    await page.getByRole('button', { name: /Make-up-Organizer/ }).first().click();
+    const bar = page.getByRole('alertdialog');
+    await bar.getByRole('button', { name: 'Verwerfen' }).click();
+    await expect(bar).toBeHidden();
+    await expect(page.locator('.topbar .project-name')).toHaveValue('Make-up-Organizer');
+  });
+
+  test('ungespeicherte Bibliothek-Bestätigung: Escape bricht ab', async ({ page }) => {
+    await loadSchmuck(page);
+    await page.locator('.lib-item[data-module-id="M01"]').first().click();
+
+    await tab(page, 'Projekt').click();
+    await page.getByRole('button', { name: /Leeres Etui/ }).first().click();
+    const bar = page.getByRole('alertdialog');
+    await expect(bar).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(bar).toBeHidden();
+    await expect(page.locator('.topbar .project-name')).toHaveValue('Schmuck-Organizer');
+  });
+});
