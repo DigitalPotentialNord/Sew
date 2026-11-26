@@ -1,0 +1,22 @@
+# Einheitliche Zeilenenden & Behandlung von Binärdateien (CRLF-Chaos vermeiden).
+* text=auto eol=lf
+
+# Explizit Text
+*.md    text
+*.ts    text
+*.tsx   text
+*.js    text
+*.json  text
+*.css   text
+*.html  text
+*.yml   text
+
+# Binär
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.pdf   binary
+*.ico   binary
+
+# Lockdateien: nie manuell editieren, in Reviews nur lesen
+package-lock.json -diff merge=union

@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest';
+import { clipSegment, wrapText, buildPdf, safe } from '../core/pdf';
+import { construct } from '../core/construction';
+import { buildTemplate } from '../core/project';
+
+const win = { x: 20, y: 10, w: 100, h: 50 };
+
+describe('clipSegment (Kachelfenster)', () => {
+  it('lässt ein Segment innerhalb des Fensters unverändert', () => {
+    expect(clipSegment([30, 20], [90, 20], win)).toEqual([[30, 20], [90, 20]]);
+  });
+  it('kürzt ein Segment, das rechts herausläuft', () => {
+    expect(clipSegment([30, 20], [300, 20], win)).toEqual([[30, 20], [120, 20]]);
+  });
+  it('kürzt ein Segment, das links herausläuft', () => {
+    expect(clipSegment([-80, 20], [50, 20], win)).toEqual([[20, 20], [50, 20]]);
+  });
+  it('kürzt senkrechte Segmente oben und unten', () => {
+    expect(clipSegment([50, -40], [50, 200], win)).toEqual([[50, 10], [50, 60]]);
+  });
+  it('behält die Richtung (a bleibt a)', () => {
+    expect(clipSegment([300, 20], [30, 20], win)).toEqual([[120, 20], [30, 20]]);
+  });
+  it('gibt null zurück, wenn nichts im Fenster liegt', () => {
+    expect(clipSegment([200, 20], [300, 20], win)).toBeNull();
+    expect(clipSegment([30, 100], [90, 100], win)).toBeNull();
+    expect(clipSegment([50, 70], [50, 90], win)).toBeNull();
+  });
+});
+
+describe('wrapText', () => {
+  it('bricht an Wortgrenzen um, ohne Wörter zu zerteilen', () => {
+    const lines = wrapText('Nadelkanäle oben rechts annähen', 80, 9);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(' ')).toBe('Nadelkanäle oben rechts annähen');
+    for (const w of ['Nadelkanäle', 'annähen']) {
+      expect(lines.some((l) => l.includes(w))).toBe(true);
+    }
+  });
+  it('lässt kurzen Text in einer Zeile', () => {
+    expect(wrapText('Kurz', 100, 9)).toEqual(['Kurz']);
+  });
+  it('trennt ein überlanges Wort hart, ohne Zeichen zu verlieren', () => {
+    const long = 'Donaudampfschifffahrtsgesellschaftskapitaen';
+    const lines = wrapText(long, 20, 9);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join('')).toBe(long);
+  });
+  it('behandelt leeren Text als keine Zeile', () => {
+    expect(wrapText('   ', 50, 9)).toEqual([]);
+  });
+});
+
+describe('buildPdf', () => {
+  const c = construct(buildTemplate('schmuck'));
+  const strings = {
+    title: 'Schmuck-Organizer',
+    subtitle: 'Organizer Studio',
+    calibration: '50 mm Kalibrierquadrat',
+    calibrationHint: 'Muss genau 50 mm messen.',
+    materials: c.materials.map((m) => ({ label: m.kind, amount: m.display ?? '', certainty: m.certainty })),
+    cutList: c.pieces.map((p) => ({ label: p.id, size: `${p.w} x ${p.h} mm`, count: `${p.count}x`, tiles: '1' })),
+    instructions: c.operations.map((o) => ({ index: o.index, phase: o.phase, text: 'Test' })),
+    footer: 'Fusszeile',
+  };
+
+  it('erzeugt ein gültiges PDF mit Deckblatt, Listen und Kacheln', async () => {
+    const bytes = await buildPdf(c, strings);
+    expect(bytes.length).toBeGreaterThan(2000);
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+  });
+
+  it('enthält so viele Seiten wie Kacheln plus vier Listen-Seiten', async () => {
+    const bytes = await buildPdf(c, strings);
+    const { PDFDocument } = await import('pdf-lib');
+    const doc = await PDFDocument.load(bytes);
+    const { tilePiece } = await import('../core/export');
+    const tiles = c.pieces.filter((p) => p.kind === 'cut').reduce((n, p) => n + tilePiece(p).length, 0);
+    expect(doc.getPageCount()).toBe(tiles + 4);
+  });
+
+  it('gibt für ein leeres Projekt kein kaputtes PDF zurück', async () => {
+    const empty = construct({ ...buildTemplate('schmuck'), modules: [] });
+    const bytes = await buildPdf(empty, { ...strings, materials: [], cutList: [] });
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+  });
+});
+describe('safe (WinAnsi)', () => {
+  it('lässt cp1252-Zeichen inklusive Umlaute und deutscher Quotes unverändert', () => {
+    expect(safe('Nadelkanäle „Maßhaltig“ — 100 %')).toBe('Nadelkanäle „Maßhaltig“ - 100 %');
+  });
+  it('ersetzt Pfeil und Multiplikation wie dokumentiert', () => {
+    expect(safe('a → b × c')).toBe('a -> b x c');
+  });
+  it('ersetzt Zeichen außerhalb von cp1252 (Emoji, CJK) statt abzustürzen', () => {
+    expect(safe('mein Etui ✂✂ 幅')).toBe('mein Etui ?? ?');
+  });
+  it('normalisiert Steuerzeichen zu Leerzeichen', () => {
+    expect(safe('a\nb\tc')).toBe('a b c');
+  });
+});
