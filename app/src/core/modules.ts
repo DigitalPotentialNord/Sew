@@ -378,7 +378,7 @@ const M03: ModuleDef = {
     return [
       { kind: 'install-zip', moduleId: id, dependsOn: [], titleKey: 'op.install-zip', values: { laenge: Math.round(w) } },
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-zip-bag', values: { breite: Math.round(w) } },
-      { kind: 'topstitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-zip', values: { laenge: Math.round(w) } },
+      { kind: 'topstitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-zip', values: { laenge: Math.round(w) }, phase: 'sew-order' },
     ];
   },
   validate: (p, ctx, id) => {

@@ -889,7 +889,8 @@ const PHASE_OF: Record<string, SewingOperation['phase']> = {
   'final-check': 'finish',
 };
 
-const PHASE_ORDER: SewingOperation['phase'][] = ['prepare', 'cut', 'sew-order', 'assemble', 'finish'];
+/** Phasenreihenfolge — EINMAL definiert; UI und PDF lesen dieselbe Liste. */
+export const PHASE_ORDER: SewingOperation['phase'][] = ['cut', 'prepare', 'sew-order', 'assemble', 'finish'];
 
 function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOperation[] {
   interface Node {
@@ -931,6 +932,7 @@ function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOp
         values: { ...op.values, modul: def.nameKey, nr: i + 1 },
         deps: [cutId],
         seq: seq++,
+        ...(op.phase ? { phase: op.phase } : {}),
       });
       moduleOps.push({ id, kind: op.kind });
     });
