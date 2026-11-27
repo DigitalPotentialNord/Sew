@@ -14,6 +14,7 @@ Der Soll-Zustand ist versioniert und in drei Stufen abgesichert:
 | [`.github/rulesets/apply-protect-main.sh`](../../.github/rulesets/apply-protect-main.sh) | anwenden (`apply`) bzw. prüfen (`--verify`), idempotent |
 | [`.github/rulesets/selftest.sh`](../../.github/rulesets/selftest.sh) | 35 Prüfungen der Prüflogik, ohne GitHub (Stub) |
 | [`.github/rulesets/schema-check.py`](../../.github/rulesets/schema-check.py) | Payload gegen das **offizielle GitHub-Schema**, 9 Negativ-Kontrollen |
+| [`.github/rulesets/ruleset-schema.json`](../../.github/rulesets/ruleset-schema.json) | der geprüfte Schema-Auszug (dereferenziert, mit Herkunftsangabe) |
 | [`.github/workflows/guard-branch-protection.yml`](../../.github/workflows/guard-branch-protection.yml) | Wächter im CI, selbst Pflicht-Check |
 
 Exit-Codes des Skripts: `0` = Soll-Zustand erreicht, `1` = Abweichungen,
@@ -196,7 +197,7 @@ anderen Fehlerquelle im Blick:
 
 | Ebene | Frage | Werkzeug | Braucht Schreibrechte? |
 | --- | --- | --- | --- |
-| **Payload** | Würde GitHub diese Konfiguration überhaupt annehmen? | `schema-check.py` gegen das offizielle OpenAPI-Schema | nein |
+| **Payload** | Würde GitHub diese Konfiguration überhaupt annehmen? | `schema-check.py` gegen den eingecheckten offiziellen Schema-Auszug | nein |
 | **Gespeichert** | Steht im Ruleset, was drinstehen soll? | `apply-protect-main.sh` liest `GET /rulesets/{id}` | nein (Lesen) |
 | **Wirksam** | Setzt GitHub es auf `main` tatsächlich durch? | `GET /rules/branches/main` — die effektiven Regeln | **nein** |
 
@@ -312,11 +313,13 @@ Ehrlich benannt, weil sie den Aussagewert begrenzen:
    `Administration: write`; GitHub antwortet mit HTTP 403. Deshalb ist die
    Kette so gebaut, dass jeder andere Schritt ohne diese Berechtigung prüfbar
    ist und der eine fehlende Schritt eine einzelne Zeile bleibt.
-2. **Es gibt kein echtes „Trockenlaufen" gegen die GitHub-API.** Der
-   Schema-Check prüft Struktur und Enums gegen die offizielle Spezifikation,
-   aber ob eine inhaltlich erlaubte Konfiguration von GitHub auch akzeptiert
-   wird, zeigt erst der Schreibzugriff. Deshalb prüft `--verify` danach die
-   **Wirkung** — nicht die Absicht.
+2. **Ein „Trockenlauf" gegen die echte GitHub-API existiert nicht.** Der
+   Schema-Check prüft Struktur und Enums gegen die offizielle Spezifikation
+   (Auszug eingecheckt, gepinnt auf `rest-api-description@d560905`, vollständig
+   offline und ohne Token). Damit ist ausgeschlossen, dass der Payload an
+   Formfehlern scheitert. Ob GitHub eine formal gültige Konfiguration auch so
+   annimmt, zeigt erst der Schreibzugriff — deshalb prüft `--verify` danach die
+   **Wirkung** statt der Absicht (§4.1, Ebene 3).
 3. **Die Wirkungsprüfung sieht keine Bypass-Akteure.** `GET /rules/branches/main`
    liefert Regeln, nicht die Bypass-Liste. Diese bleibt an `GET /rulesets/{id}`
    mit Schreibrechten gebunden; ohne sie meldet das Skript das ausdrücklich als
