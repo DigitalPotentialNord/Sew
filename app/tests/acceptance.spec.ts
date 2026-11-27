@@ -127,9 +127,11 @@ test.describe('2 — Modul hinzufügen, verschieben, konfigurieren', () => {
   test('Parameter im Eigenschaften-Panel ändern die Geometrie live', async ({ page }) => {
     // M01 "Stofftasche" hat eine freie Breite/Höhe
     await page.locator('.lib-item[data-module-id="M01"]').first().click();
+    // addModule selektiert das neue Modul automatisch — kein zusätzlicher
+    // Klick auf das SVG-<g> nötig (der ohne force:true auf SVG-Elementen
+    // nicht zuverlässig aktionierbar ist).
     const mod = page.locator('.canvas-svg g.mod[aria-label^="Stofftasche"]');
     await expect(mod).toHaveCount(1);
-    await mod.click();
 
     const width = page.getByRole('spinbutton', { name: 'Breite', exact: true });
     await expect(width).toBeVisible();
@@ -442,7 +444,8 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await page.getByRole('button', { name: /Leeres Etui/ }).first().click();
     await tab(page, 'Designen').click();
     await page.locator('.lib-item[data-module-id="M01"]').first().click();
-    await page.locator('.canvas-svg g.mod').first().click();
+    // addModule selektiert das neue Modul automatisch — Skaliergriffe und
+    // Eigenschaften sind sofort sichtbar. Kein zusätzlicher SVG-Klick nötig.
 
     const wInput = page.getByRole('spinbutton', { name: 'Breite', exact: true });
     const hInput = page.getByRole('spinbutton', { name: 'Höhe', exact: true });
