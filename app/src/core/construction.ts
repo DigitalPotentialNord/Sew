@@ -647,7 +647,7 @@ export function packFabric(
   let shelfY = 0;
   let shelfH = 0;
   let x = 0;
-  let rows = 0;
+  let rows = 0; // vollständig geschlossene Reihen
 
   for (const e of expanded) {
     if (e.w > fabricWidthMm) {
@@ -678,7 +678,9 @@ export function packFabric(
 
   const usedHeight = mm(shelfY + shelfH);
   const meters = Math.ceil(((usedHeight * (1 + wastePct / 100)) / 1000) * 100) / 100;
-  return { pieces: items, rows: rows + 1, usedHeightMm: usedHeight, meters, wastePct };
+  // Offene letzte Reihe zählen — geschlossene zählen bereits in `rows`.
+  const totalRows = rows + (shelfH > 0 || x > 0 ? 1 : 0);
+  return { pieces: items, rows: totalRows, usedHeightMm: usedHeight, meters, wastePct };
 }
 
 
@@ -737,7 +739,7 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       basisKey: relevant.reduce((a, pc) => a + pc.count, 0) === 1 ? 'basis.flaecheOne' : 'basis.flaeche',
       basisValues: {
         teile: relevant.reduce((a, pc) => a + pc.count, 0),
-        flaeche: (Math.round(areaMm2 / 100) / 10).toFixed(1).replace('.', ','),
+        flaeche: (areaMm2 / 10000).toFixed(1).replace('.', ','), // mm² → dm²
         breite: planWidth,
         verschnitt: plan.wastePct,
       },

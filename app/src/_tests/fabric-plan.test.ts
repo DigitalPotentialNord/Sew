@@ -76,3 +76,24 @@ describe('Stoffeinkauf — Einlage/Vlies sind schmaler als Meterware (Issue #15)
     expect(interfacing?.basisValues?.breite).toBe(PRACTICE.interfacingWidthMm);
   });
 });
+
+describe('packFabric — Reihen zählen (#15-Selbstprüfung)', () => {
+  it('übergroßes Teil als letztes erzeugt keine Geisterreihe', () => {
+    const plan = packFabric([piece('a', 1300, 50), piece('big', 1500, 100)], 1400, 'fabric');
+    expect(plan.rows).toBe(2); // 1 normale Reihe + 1 übergroße — nicht 3
+    expect(plan.usedHeightMm).toBe(150);
+  });
+
+  it('platzierte Teile füllen eine Reihe → rows zählt korrekt', () => {
+    // usableWidth = 1372 mm → 2×500 passen, das dritte muss in eine zweite Reihe.
+    const plan = packFabric([piece('a', 500, 50), piece('b', 500, 50)], 1400, 'fabric');
+    expect(plan.rows).toBe(1);
+    const plan2 = packFabric([piece('a', 500, 50), piece('b', 500, 50), piece('c', 500, 50)], 1400, 'fabric');
+    expect(plan2.rows).toBe(2);
+  });
+
+  it('überlaufende Reihe + übergroßes Teil zählt konsistent', () => {
+    const plan = packFabric([piece('a', 1300, 50), piece('b', 1300, 50), piece('big', 1500, 100)], 1400, 'fabric');
+    expect(plan.rows).toBe(3);
+  });
+});

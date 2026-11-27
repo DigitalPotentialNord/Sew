@@ -18,7 +18,7 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 ## Legende
 
 - Status: ✅ implementiert & lokal verifiziert (tsc/eslint/vitest/build/size) · ⏳ E2E/visuell in CI abzunehmen
-- Zahlen: Tests nach dieser Sitzung **361 Unit-Tests / 17 Dateien** (vor Sitzungsbeginn: 255 / 9)
+- Zahlen: Tests nach dieser Sitzung **370 Unit-Tests / 19 Dateien** (vor Sitzungsbeginn: 255 / 9)
 
 ## Fortschrittsübersicht
 
@@ -75,10 +75,32 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 - #15-Doku: `Interfacing width 900 mm` ist Praxiswert (`H`), kein Messwert — mittelfristig
   durch Herstellerdaten verifizieren.
 
+## Selbstprüfung (nach CI-Grün, auf Nutzer-Nachfrage)
+
+Eine harte Nachprüfung des gesamten PRs fand **vier echte Mängel**, die behoben wurden:
+
+1. **`flaeche` im Materialbasis-String war 10× zu groß** (`areaMm2/100/10` statt mm²→dm²).
+   Prä-existenter Fehler, den #22 (deutsche Formate) berührte, aber nicht behob. Jetzt
+   `areaMm2/10000`; `src/_tests/materials-units.test.ts` (3 Templates) nagelt die Einheit fest.
+2. **`packFabric` zählte eine Geisterreihe**, wenn das letzte Teil überbreit war
+   (`rows + 1` doppelt). Jetzt: geschlossene Reihen + offene letzte Reihe; 3 neue Tests.
+3. **`.ctx-bar` konnte bei Pan-nach-oben auf der eigenen Auswahl kleben** — die geklemmte
+   Oberkante wurde wie »frei« bewertet, und die Auswahl stand nicht in `others`. Jetzt
+   Strafpunkte bei Klemmung; 2 neue Tests.
+4. **Globale Tastaturkürzel (App) respektierten nur Textfelder**, nicht Selects/Buttons/
+   ARIA-Rollen: Entf/⌫/`r`/Ziffern wirkten hinter fokussierten Bedienelementen, und die
+   Space-Pan-Logik lag doppelt vor. Jetzt geteilt `src/ui/isInteractiveTarget.ts`
+   (Delete/`r`/Ziffern nur ohne interaktiven Fokus, Strg+Z/Y überall außer in Textfeldern,
+   Escape respektiert Selects); ui-css-Vertrag entsprechend aktualisiert.
+
+Zusätzlich: `src/_tests/i18n-completeness.test.ts` (neu) — über alle 3 Templates: keine
+offenen/fehlenden Platzhalter in rule/op/basis-Texten. Übrige Audits (Hash, dm², Einlage,
+Druck-Pfad = `totalPages` ist per Test an den Renderer gekoppelt) waren sauber.
+
 ## Nächste Schritte
 
 1. ~~CI abwarten; Fehlschläge (insb. E2E) beheben.~~ — CI grün (beide Jobs) seit Commit
-   `5d09e18`.
+   `5d09e18`; nach den Härtungen erneut zu beobachten.
 2. Nutzer-Review des Sammel-PRs; Merge nur mit Freigabe.
 3. Nach Merge: Issues #12–#22 schließen (dann `Fixes` statt `Refs` verwenden).
 4. Gegebenenfalls #13 (cm-Anzeige, vollständig) und #12-Fachentscheidung (Auto-Zeilenumbruch)

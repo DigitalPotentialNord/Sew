@@ -19,6 +19,7 @@ import type { Side } from '../core/construction';
 import type { ModuleTypeId, Prim } from '../core/types';
 import { useStore } from '../state/store';
 import { chooseContextBarPlacement, type PixelRect } from './contextBar';
+import { isInteractiveTarget } from './isInteractiveTarget';
 import { t } from '../i18n/de';
 import { Icon } from './icons';
 import { Button } from './parts/primitives';
@@ -136,16 +137,8 @@ export function Canvas(): JSX.Element {
   }, [autoFit, fit]);
 
   useEffect(() => {
-    const isTypingOrInteractive = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) return false;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
-      // Native Bedienelemente und ARIA-Rollen behalten die Leertaste (Aktivierung).
-      if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement) return true;
-      if (target.isContentEditable) return true;
-      return target.closest('[role="button"], [role="tab"], [role="menu"], [role="listbox"], [role="dialog"]') !== null;
-    };
     const down = (e: KeyboardEvent): void => {
-      if (e.code !== 'Space' || isTypingOrInteractive(e.target)) return;
+      if (e.code !== 'Space' || isInteractiveTarget(e.target)) return;
       // Während des Starter-Dialogs darf die Canvas (hinter dem Overlay) nicht mitschwenken.
       if (useStore.getState().session.startOpen) return;
       e.preventDefault();

@@ -19,6 +19,7 @@ import { Canvas } from './Canvas';
 import { Library } from './Library';
 import { Properties } from './Properties';
 import { Warnings } from './Warnings';
+import { isInteractiveTarget } from './isInteractiveTarget';
 import { findingKey } from '../core/fixes';
 import { MaterialsView } from './MaterialsView';
 import { PatternView } from './PatternView';
@@ -52,9 +53,12 @@ export function App(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null;
-      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-      if (typing) return;
       const mod = e.metaKey || e.ctrlKey;
+      // Textfelder und Bedienelemente behalten ihre Tastatur: normale Kürzel
+      // (Delete, r, Ziffern) greifen nur ohne Fokus auf interaktiven Zielen;
+      // Strg/Cmd+Z/Y bleibt überall erlaubt außer in Texteingaben.
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+      if (!mod && isInteractiveTarget(target)) return;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();

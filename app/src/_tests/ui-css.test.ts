@@ -13,6 +13,8 @@ const css = readFileSync(join(__dirname, '..', 'ui', 'styles.css'), 'utf8');
 const LIBRARY = readFileSync(join(__dirname, '..', 'ui', 'Library.tsx'), 'utf8');
 const STARTSCREEN = readFileSync(join(__dirname, '..', 'ui', 'StartScreen.tsx'), 'utf8');
 const CANVAS = readFileSync(join(__dirname, '..', 'ui', 'Canvas.tsx'), 'utf8');
+const APP = readFileSync(join(__dirname, '..', 'ui', 'App.tsx'), 'utf8');
+const IS_INTERACTIVE = readFileSync(join(__dirname, '..', 'ui', 'isInteractiveTarget.ts'), 'utf8');
 
 /** Extrahiert den Deklarationsblock einer CSS-Regel (erste Trefferstelle). */
 const ruleBody = (selector: string): string => {
@@ -96,16 +98,21 @@ describe('Issue #19: Starter-Eingaben und Tastaturbedienung', () => {
     expect(Number(z![1])).toBeGreaterThanOrEqual(70);
   });
 
-  it('Space-Panning greift nicht bei INPUT/TEXTAREA/SELECT/BUTTON/ARIA-Rollen/Dialog', () => {
-    expect(CANVAS).toContain('HTMLInputElement');
-    expect(CANVAS).toContain('HTMLTextAreaElement');
-    expect(CANVAS).toContain('HTMLSelectElement');
-    expect(CANVAS).toContain('HTMLButtonElement');
-    expect(CANVAS).toContain('[role="button"]');
-    expect(CANVAS).toContain('[role="tab"]');
-    expect(CANVAS).toContain('[role="dialog"]');
+  it('Space-Panning und globale Kürzel greifen nicht bei interaktiven Zielen/Texteingaben', () => {
+    // Die Fokus-Erkennung liegt im geteilten Helfer — Canvas (Space-Pan, #19)
+    // und App (Delete/r/Ziffern/Strg+Z) nutzen denselben Vertrag.
+    expect(IS_INTERACTIVE).toContain('HTMLInputElement');
+    expect(IS_INTERACTIVE).toContain('HTMLTextAreaElement');
+    expect(IS_INTERACTIVE).toContain('HTMLSelectElement');
+    expect(IS_INTERACTIVE).toContain('HTMLButtonElement');
+    expect(IS_INTERACTIVE).toContain('[role="button"]');
+    expect(IS_INTERACTIVE).toContain('[role="tab"]');
+    expect(IS_INTERACTIVE).toContain('[role="dialog"]');
+    expect(CANVAS).toContain('isInteractiveTarget');
     // Während des Starter-Dialogs gar nicht pannen
     expect(CANVAS).toContain('session.startOpen');
+    // Die globalen Kürzel der App respektieren denselben Vertrag
+    expect(APP).toContain('isInteractiveTarget');
   });
 });
 
