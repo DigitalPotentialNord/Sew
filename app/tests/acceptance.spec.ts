@@ -409,7 +409,9 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await loadSchmuck(page);
     const mod = page.locator('.canvas-svg g.mod').last();
     const before = await mod.boundingBox();
-    await mod.click({ force: true });
+    // Auf .mod-shape klicken (nicht auf <g>), damit der Pointer-Event das
+    // Modul sicher trifft — das <g>-Zentrum kann neben der Rect liegen.
+    await mod.locator('rect.mod-shape').click({ force: true });
     await page.keyboard.press('r');
     await expect
       .poll(async () => {
@@ -539,6 +541,10 @@ test.describe('11 — Responsive Matrix & Anleitung-Druck', () => {
         expect(metrics.clippedTables, `${label}/${name} clippedTables`).toBe(0);
       }
       if (size.width <= 1000) {
+        // Die Sheets (Bibliothek/Eigenschaften/Warnungen) sind Teil der
+        // EditorWorkspace — zurück zum Designen-View wechseln, bevor das
+        // Eigenschaften-Sheet geöffnet wird.
+        await tab(page, 'Designen').click();
         await page.getByRole('button', { name: /Eigenschaften/i }).click();
         await expect(page.locator('.sheet').first()).toBeVisible();
         await page.keyboard.press('Escape');

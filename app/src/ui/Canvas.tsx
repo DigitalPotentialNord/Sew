@@ -693,13 +693,13 @@ export function Canvas(): JSX.Element {
         ) : null}
 
         {/* Kontext-Aktionsleiste nahe der Auswahl (Desktop) — nur Einzelwahl */}
-        {ctxAnchor && selected.length === 1 && wrapRef.current ? (
+        {ctxAnchor && selected.length === 1 ? (
           <ContextBar
             anchor={ctxAnchor}
             scale={scale}
             panX={session.panX}
             panY={session.panY}
-            wrapWidth={wrapRef.current.clientWidth}
+            wrapWidth={wrapRef.current?.clientWidth ?? 800}
             side={project.modules.find((m) => m.id === selected[0])?.side ?? 'left'}
             onMoveSide={(s) => moveToSide(selected[0]!, s)}
             onDuplicate={() => duplicate(selected[0]!)}

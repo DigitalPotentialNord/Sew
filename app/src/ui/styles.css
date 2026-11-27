@@ -378,14 +378,14 @@ svg { display: block; }
   transform-origin: 0 0;
   will-change: transform;
 }
-.canvas-svg { display: block; user-select: none; }
+.canvas-svg { display: block; user-select: none; overflow: visible; }
 .canvas-svg text { pointer-events: none; }
 
 .measure { font-family: var(--font-mono); font-size: 9px; fill: var(--ink-3); }
 /* Zeilenbeschriftung liegt in mm-Koordinaten — deshalb in mm-großer Schrift. */
 .row-label { font-size: 5px; fill: var(--ink-3); font-weight: 600; letter-spacing: 0.3px; }
 .measure-strong { fill: var(--ink-2); }
-.dim-line { stroke: var(--line-strong); stroke-width: 1; }
+.dim-line { stroke: var(--line-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .dim-tick { stroke: var(--line-strong); stroke-width: 1; }
 .guide { stroke: var(--geo-guide); stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.9; }
 .row-bg { fill: var(--geo-row); }
@@ -810,7 +810,6 @@ table.data tbody tr:hover { background: var(--surface-2); }
   .lib-item { padding: 10px 8px; }
   .finding { padding: 10px var(--s3); }
   .sheet-head { padding: var(--s4); }
-  .mode-toggle button { height: 32px; }
 }
 
 /* Reduzierte Bewegung */
@@ -1024,7 +1023,7 @@ table.data tbody tr:hover { background: var(--surface-2); }
   .start-title { font-size: 22px; }
   .start-grid { grid-template-columns: repeat(2, 1fr); }
   .lib-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
-  .mode-toggle button { padding: 0 10px; }
+  .mode-toggle button { padding: 0 10px; height: 32px; }
 }
 
 /* ── PR9: Mobile Tabbar & Table Scroll ─────────────────────────────────────── */
@@ -1034,6 +1033,7 @@ table.data tbody tr:hover { background: var(--surface-2); }
 .warnings-collapsed .pane-body { display: none; }
 
 @media (max-width: 560px) {
+  :root { --tabbar-h: 48px; }
   .status-metrics { display: none; }
   .tabbar { padding: 0 2px; gap: 0; overflow-x: hidden; }
   .tab-spacer { display: none; }
