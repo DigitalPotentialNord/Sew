@@ -13,7 +13,7 @@ ohne UI-Abhängigkeiten, deutsche Oberfläche, Export.
 
 | Bereich | Stand | Nachweis |
 | --- | --- | --- |
-| Konstruktionskern (`src/core/`) | fertig | 228 Unit-Tests |
+| Konstruktionskern (`src/core/`) | fertig | 318 Unit-Tests |
 | Regelwerk V-G/V-M | 15 Regeln, V-G-11 fehlt | Tests + Vorlagen mit 0 Fehlern |
 | Praxiswerte | v1.2.0, zentral in `practice.ts` | `LIMITS`, `PRACTICE` |
 | Drei Vorlagen | Schmuck / Make-up / Stricknadel, je 0 Fehler / 0 Hinweise | `npx vite-node`-Sonde je Vorlage |
@@ -31,7 +31,7 @@ ohne UI-Abhängigkeiten, deutsche Oberfläche, Export.
 ```
 npx tsc --noEmit        → 0 Fehler
 npx eslint src          → 0 Fehler
-npx vitest run          → 228 Tests, 8 Dateien
+npx vitest run          → 318 Tests, 14 Dateien
 npx playwright test     → 30 Tests
 npm run build           → OK, Editor-Chunk 388 kB (gzip 111 kB), PDF-Chunk separat
 ```
@@ -99,7 +99,19 @@ Im Editor sitzt der Download als zweiter Knopf neben „PDF / Druck“; das
 PDF-Paket liegt in einem eigenen Chunk (427 kB, gzip 178 kB) und wird erst beim
 Klick geladen. Der Editor selbst bleibt bei 388 kB / 111 kB gzip.
 
-### 2.4 Kleinere Ehrlichkeiten
+### 2.4 Golden-Hash-Wechsel (Issue #15, 2026-11-27)
+
+Die Referenz-Hashes wechselten von `6443f47e` / `a712eb1e` / `1a7e23ff`
+(README: `536766d8` / `dc2a59aa` / `5ed64ba1`) auf
+`e4396906` / `deb5f0a6` / `a3bda729`. Grund: der Hash enthielt die Modul-
+reihenfolge innerhalb einer Zeile nicht (die Module wurden lexikografisch
+sortiert gehasht), obwohl `layout()` über denselben Array-Index platziert.
+Zwei verschieden angeordnete Layouts erhielten denselben Hash — falsche
+"Absicht"-Semantik. Jetzt fließt (Zeilenindex, Position im Modul-Array) in
+den Hash ein. Keine Geometrieänderung, keine Praxis- oder Geometrie-Änderung,
+nur die Hash-Eingabe — die Projektdaten bleiben unverändert interpretierbar.
+
+### 2.5 Kleinere Ehrlichkeiten
 
 - `applyFix` setzt **kein** `updatedAt` mehr auf den 1.1.1970. Der Kern liest
   keine Uhr; der Store stempelt. (Test in `project.test.ts`.)
@@ -151,7 +163,7 @@ app/src/core/     geometry · construction · modules · practice · fixes · ex
 app/src/state/    store.ts (Zustand, Undo 60, Hash-Guard)
 app/src/ui/       App · Canvas · Properties · Warnings · Library · 5 Ansichten · styles.css
 app/src/i18n/     de.ts (alle sichtbaren Strings)
-app/src/_tests/   8 Dateien, 228 Tests
+app/src/_tests/   14 Dateien, 318 Tests
 app/tests/        acceptance.spec.ts, 30 Tests
 app/docs-shots/   13 Screenshots des laufenden Editors
 ```

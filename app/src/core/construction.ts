@@ -651,7 +651,15 @@ export function packFabric(
 
   for (const e of expanded) {
     if (e.w > fabricWidthMm) {
-      // passt nicht in die Stoffbreite → wird als Warnung gemeldet, hier trotzdem platziert
+      // Passt nicht in die Stoffbreite → wird als Warnung gemeldet (V-G-12), hier trotzdem
+      // platziert. ZUERST die offene Reihe abschließen, sonst überlappt das Teil die
+      // bereits liegenden Teile in derselben Reihe.
+      if (x > 0 && shelfH > 0) {
+        shelfY += shelfH;
+        shelfH = 0;
+        x = 0;
+        rows += 1;
+      }
       items.push({ pieceId: e.id, rect: rect(0, shelfY, e.w, e.h), count: 1 });
       shelfY += e.h;
       rows += 1;
@@ -713,7 +721,10 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
   for (const kind of ['fabric', 'lining', 'interfacing', 'batting'] as const) {
     const relevant = pieces.filter((pc) => pc.material === kind && pc.kind === 'cut');
     if (relevant.length === 0) continue;
-    const plan = packFabric(pieces, fabricWidth, kind);
+    // Einlage (H250) und Vlies werden typischerweise 90 cm breit verkauft —
+    // nicht mit der Meterwaren-Breite des Außenstoffs packen.
+    const planWidth = kind === 'fabric' || kind === 'lining' ? fabricWidth : PRACTICE.interfacingWidthMm;
+    const plan = packFabric(pieces, planWidth, kind);
     const areaMm2 = relevant.reduce((acc, pc) => acc + pc.w * pc.h * pc.count, 0);
     lines.push({
       kind,
@@ -727,7 +738,7 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       basisValues: {
         teile: relevant.reduce((a, pc) => a + pc.count, 0),
         flaeche: Math.round(areaMm2 / 100) / 10,
-        breite: fabricWidth,
+        breite: planWidth,
         verschnitt: plan.wastePct,
       },
       sources: relevant.map((pc) => pc.id),
@@ -1044,23 +1055,28 @@ export function construct(p: Project): Construction {
   const totalAvail = rows.length * (p.base.widthMm - 2 * PRACTICE.edgeMarginMm);
 
   // I7/I8: der Hash hängt nur an der ABSICHT (Base, Zeilen, Modulparameter, Praxisversion),
-  // nicht an IDs, Zeitstempeln oder der Speicherreihenfolge — die Reihenfolge selbst steckt
-  // numerisch in `order` und ändert den Hash weiterhin, sobald sie wirklich tauscht (I6).
+  // nicht an IDs, Zeitstempeln oder der Speicherreihenfolge. Die Reihenfolge der Module
+  // innerhalb einer Zeile ist dagegen Teil der Konstruktion (sie bestimmt die Anordnung
+  // auf dem Stoff) — sie fließt deterministisch als Index in den Hash ein: sortiert wird
+  // nach (Zeilenindex, Position im Modul-Array). Ein Umhängen über Zeilengrenzen hinweg
+  // ändert den Hash nicht (gleiche Zeile, gleiche Reihenfolge → gleiche Konstruktion).
+  const rowIndex = new Map(p.rows.map((r, i) => [r.id, i]));
   const hashInput = JSON.stringify({
     practice: PRACTICE.version,
     base: p.base,
     rows: p.rows.map((r) => r.name),
     modules: p.modules
-      .map((m) => ({
+      .map((m, i) => ({ m, i, row: rowIndex.get(m.rowId) ?? p.rows.length }))
+      .sort((a, b) => a.row - b.row || a.i - b.i)
+      .map(({ m, row }) => ({
         typeId: m.typeId,
-        row: p.rows.findIndex((r) => r.id === m.rowId),
+        row,
         params: Object.keys(m.params)
           .sort()
           .map((k) => [k, m.params[k]]),
         rotation: m.rotation,
         side: m.side,
-      }))
-      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      })),
     settings: p.settings,
   });
 

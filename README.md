@@ -54,7 +54,7 @@ Browser; Projekte liegen im `localStorage`, Exporte sind Dateien.
 | `npm run build` | Typen prüfen + Produktionsbuild nach `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint 9 (flat config) |
-| `npm test` | 228 Unit-Tests (Vitest, `src/_tests/`) |
+| `npm test` | 318 Unit-Tests (Vitest, `src/_tests/`) |
 | `npm run e2e` | 30 Abnahmetests (Playwright, `tests/`) |
 | `npm run check` | typecheck + lint + test — **vor jedem Commit** |
 
@@ -92,7 +92,7 @@ app/
 
 **Die eine Regel, die den ganzen Aufbau erklärt:** `src/core/` kennt weder React
 noch `localStorage` noch `Date.now()`. Der Kern ist eine Funktion
-`Project → Construction`. Deshalb ist er in Node testbar (228 Tests laufen in
+`Project → Construction`. Deshalb ist er in Node testbar (318 Tests laufen in
 ~2 s), deterministisch und für ein zweites Frontend wiederverwendbar.
 
 ---
@@ -119,9 +119,9 @@ ein Beispiel-PDF in `app/docs-shots/schnittmuster-beispiel.pdf`.
 
 | Vorlage | Grundfläche | Module | Teile | Prüfung | Hash |
 | --- | --- | --- | --- | --- | --- |
-| Schmuck-Organizer | 240 × 200 mm, Bund 32 | 5 | 10 Zuschnittteile | 0 Fehler / 0 Warnungen | `536766d8` |
-| Make-up-Organizer | 280 × 240 mm, Bund 30 | 6 | 13 Zuschnittteile | 0 / 0 | `dc2a59aa` |
-| Stricknadel-Organizer | 240 × 330 mm, Bund 36 | 11 | 21 Zuschnittteile | 0 / 0 | `5ed64ba1` |
+| Schmuck-Organizer | 240 × 200 mm, Bund 32 | 5 | 10 Zuschnittteile | 0 Fehler / 0 Warnungen | `e4396906` |
+| Make-up-Organizer | 280 × 240 mm, Bund 30 | 6 | 13 Zuschnittteile | 0 / 0 | `deb5f0a6` |
+| Stricknadel-Organizer | 240 × 330 mm, Bund 36 | 11 | 21 Zuschnittteile | 0 / 0 | `a3bda729` |
 
 Die Hashes sind Golden-Werte: sie ändern sich, wenn sich Geometrie, Praxiswerte
 oder Parameterauswertung ändern. Tests halten Determinismus und

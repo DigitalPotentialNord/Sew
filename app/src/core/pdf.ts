@@ -162,7 +162,13 @@ function listPages(
   footer(p, footerText);
 }
 
-export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Array> {
+export interface BuiltPdf {
+  readonly bytes: Uint8Array;
+  /** Tatsächliche Seitenzahl des erzeugten Dokuments (doc.getPageCount()). */
+  readonly pages: number;
+}
+
+export async function buildPdf(c: Construction, s: PdfStrings): Promise<BuiltPdf> {
   const doc = await PDFDocument.create();
   doc.setTitle(safe(s.title));
   doc.setCreator('Organizer Studio');
@@ -252,7 +258,7 @@ export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Arr
     footer(page, s.footer);
   }
 
-  return doc.save();
+  return { bytes: await doc.save(), pages: doc.getPageCount() };
 }
 
 /** Schneidet ein beliebiges Liniensegment auf ein Kachelfenster zu (Liang–Barsky). */

@@ -243,9 +243,8 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
         footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
       };
       const { buildPdf } = await import('../core/pdf');
-      const bytes = await buildPdf(c, strings);
+      const { bytes, pages } = await buildPdf(c, strings);
       downloadText(fileName(project.name, 'schnittmuster', 'pdf'), 'application/pdf', bytes);
-      const pages = c.pieces.filter((pc) => pc.kind === 'cut').reduce((n, pc) => n + tilePiece(pc).length, 0) + 4;
       toast(t('toast.pdfSaved', { n: pages }), 'ok');
     } catch (err) {
       toast(err instanceof Error ? err.message : 'PDF fehlgeschlagen', 'error');

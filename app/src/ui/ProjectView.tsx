@@ -227,7 +227,7 @@ export function ProjectView(): JSX.Element {
                 <dd className="mono">{c.practiceVersion}</dd>
                 <dt>Schema</dt>
                 <dd className="mono">v{project.schemaVersion}</dd>
-                <dt>{t('proj.statsPieces')}</dt>
+                <dt>{t('proj.statsPiecesTotal')}</dt>
                 <dd>{c.metrics.pieceCount}</dd>
                 <dt>Fehler / Hinweise</dt>
                 <dd>

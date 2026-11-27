@@ -25,6 +25,8 @@ export const PRACTICE = {
   threadDensityFactor: 3.4,
   /** Einzugsreserve je Bandende (M04). */
   elasticTailMm: 10,
+  /** Typische Breite von Einlage (H250) und Vlies — Meterware vs. Zuschnitte. [H] */
+  interfacingWidthMm: 900,
   /** Mindestlänge einer Reißverschlussöffnung. */
   minZipMm: 80,
   /** Toleranz für die Maßhaltigkeit im Druck (± mm bei 50 mm). */
