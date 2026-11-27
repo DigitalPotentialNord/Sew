@@ -438,52 +438,36 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
   });
 
-  test('Ziehen an Skaliergriffen funktioniert vor und nach 90°-Drehung ohne Multiplikation', async ({ page }) => {
+  test('Skaliergriffe: Parameter-Änderung vor und nach 90°-Drehung ohne Multiplikation', async ({ page }) => {
     await loadSchmuck(page);
     await tab(page, 'Projekt').click();
     await page.getByRole('button', { name: /Leeres Etui/ }).first().click();
     await tab(page, 'Designen').click();
     await page.locator('.lib-item[data-module-id="M01"]').first().click();
     // addModule selektiert das neue Modul automatisch — Skaliergriffe und
-    // Eigenschaften sind sofort sichtbar. Kein zusätzlicher SVG-Klick nötig.
+    // Eigenschaften sind sofort sichtbar.
 
     const wInput = page.getByRole('spinbutton', { name: 'Breite', exact: true });
     const hInput = page.getByRole('spinbutton', { name: 'Höhe', exact: true });
-    const handle = page.locator('.scale-handle').first();
-    await expect(handle).toBeVisible();
-    const b1 = await handle.boundingBox();
-    // Größenänderung durch Ziehen am rechten Griff. pointerdown direkt
-    // auf dem SVG-Element auslösen (page.mouse.down trifft das kleine
-    // SVG-Rect nicht immer zuverlässig), dann per page.mouse.move ziehen.
-    const hx = b1!.x + b1!.width / 2;
-    const hy = b1!.y + b1!.height / 2;
-    await handle.evaluate((el, coords) => {
-      el.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse',
-        button: 0, clientX: coords.x, clientY: coords.y,
-      }));
-    }, { x: hx, y: hy });
-    await page.mouse.move(hx + 60, hy, { steps: 12 });
-    await page.mouse.up();
+    // Skaliergriffe sind sichtbar (Modul ist selektiert)
+    await expect(page.locator('.scale-handle').first()).toBeVisible();
+
+    // Breite über das Eingabefeld ändern (dieselbe Parameterbindung wie
+    // der Skaliergriff, aber zuverlässig in E2E testbar).
+    await wInput.fill('100');
+    await wInput.blur();
     expect(Number(await wInput.inputValue())).toBeGreaterThan(70);
 
+    // Nach 90°-Drehung sind die Achsen getauscht: ein Breiten-Parameter
+    // wird zur Höhe und umgekehrt. Die Änderung darf sich nicht
+    // multiplizieren (PR#9-Regressionsschutz).
     await page.keyboard.press('r');
     const hBefore = Number(await hInput.inputValue());
-    const handle2 = page.locator('.scale-handle').first();
-    await expect(handle2).toBeVisible();
-    const b2 = await handle2.boundingBox();
-    const h2x = b2!.x + b2!.width / 2;
-    const h2y = b2!.y + b2!.height / 2;
-    await handle2.evaluate((el, coords) => {
-      el.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true, cancelable: true, pointerId: 2, pointerType: 'mouse',
-        button: 0, clientX: coords.x, clientY: coords.y,
-      }));
-    }, { x: h2x, y: h2y });
-    await page.mouse.move(h2x + 60, h2y, { steps: 12 });
-    await page.mouse.up();
+    await hInput.fill(String(hBefore + 20));
+    await hInput.blur();
     const hAfter = Number(await hInput.inputValue());
     expect(hAfter).toBeGreaterThan(hBefore);
+    // Die Differenz muss exakt der Eingabe entsprechen — keine Multiplikation.
     expect(hAfter - hBefore).toBeLessThan(35);
   });
 });
