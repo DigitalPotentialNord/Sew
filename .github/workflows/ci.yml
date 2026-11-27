@@ -86,7 +86,7 @@ jobs:
         run: npx playwright test
 
       - name: Test-Ergebnisse hochladen
-        uses: actions/upload-artifact@b4b333b918d38a737fcc34c63f1b9d2e1f7b4c78 # v4 (Pinned)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (Pinned)
         if: always()
         with:
           name: playwright-results
