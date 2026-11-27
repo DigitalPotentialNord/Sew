@@ -409,17 +409,19 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await loadSchmuck(page);
     const mod = page.locator('.canvas-svg g.mod').last();
     const shape = mod.locator('rect.mod-shape');
-    const wBefore = await shape.getAttribute('width');
     // Modul selektieren: Maus an das Zentrum der mod-shape-Rect bewegen
     // und klicken. Danach .mod.sel verifizieren, bevor 'r' gedrückt wird.
     const box = await shape.boundingBox();
     await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
     await expect(mod).toHaveClass(/sel/);
+    // Die sel-box verwendet m.rect.w direkt. Da occupied() bei 90°-Rotation
+    // w/h tauscht, ändert sich m.rect.w (35 → 45) — ein zuverlässiger
+    // Indikator, dass die Rotation stattgefunden hat.
+    const selBox = mod.locator('rect.sel-box');
+    const wBefore = await selBox.getAttribute('width');
     await page.keyboard.press('r');
-    // Bei 90°-Rotation tauschen drawW/drawH — das width-Attribut der
-    // mod-shape-Rect ändert sich (m.rect.w → m.rect.h).
     await expect
-      .poll(async () => page.locator('.canvas-svg g.mod').last().locator('rect.mod-shape').getAttribute('width'))
+      .poll(async () => page.locator('.canvas-svg g.mod').last().locator('rect.sel-box').getAttribute('width'))
       .not.toBe(wBefore);
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
   });
