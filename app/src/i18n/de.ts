@@ -522,7 +522,6 @@ export const de = {
   'proj.lining': 'Futterlage',
   'proj.seam': 'Nahtzugabe',
   'proj.fabric': 'Stoffbreite',
-  'proj.unit': 'Anzeigeeinheit',
   'proj.stats': 'Kennzahlen',
   'proj.statsModules': 'Module',
   'proj.statsPieces': 'Zuschnittteile',

@@ -6,7 +6,7 @@ import { useStore } from '../state/store';
 import { formatAmount } from '../core/construction';
 import { t } from '../i18n/de';
 import { downloadText, fileName, timestampForFile } from '../core/export';
-import { Button, NumberField, Panel, Segmented, Switch } from './parts/primitives';
+import { Button, NumberField, Panel, Switch } from './parts/primitives';
 import { Icon } from './icons';
 
 export function ProjectView(): JSX.Element {
@@ -179,15 +179,6 @@ export function ProjectView(): JSX.Element {
               unit="mm"
               slider
               onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, fabricWidthMm: v } }))}
-            />
-            <Segmented
-              label={t('proj.unit')}
-              value={project.settings.unit}
-              options={[
-                { value: 'mm', label: 'mm' },
-                { value: 'cm', label: 'cm' },
-              ]}
-              onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, unit: v } }))}
             />
           </Panel>
 

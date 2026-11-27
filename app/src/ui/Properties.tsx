@@ -301,7 +301,6 @@ function BaseProperties(): JSX.Element {
       <Collapsible title={t('props.settings')} defaultOpen={false}>
         <NumberField label={t('proj.seam')} value={project.settings.seamAllowanceMm} min={4} max={20} step={1} unit="mm" onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, seamAllowanceMm: v } }))} />
         <NumberField label={t('proj.fabric')} value={project.settings.fabricWidthMm} min={LIMITS.fabricWidthMm.min} max={LIMITS.fabricWidthMm.max} step={10} unit="mm" onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, fabricWidthMm: v } }))} />
-        <Segmented label={t('proj.unit')} value={project.settings.unit} options={[{ value: 'mm', label: 'mm' }, { value: 'cm', label: 'cm' }]} onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, unit: v } }))} />
       </Collapsible>
     </div>
   );
