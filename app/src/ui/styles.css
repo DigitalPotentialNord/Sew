@@ -319,7 +319,7 @@ svg { display: block; }
   display: grid; place-items: center; overflow: hidden; border: 1px solid var(--line);
 }
 .lib-card-preview svg { display: block; }
-.lib-text { min-width: 0; flex: 1 1 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+.lib-text { min-width: 0; flex: 0 0 auto; display: flex; flex-direction: column; gap: 1px; overflow: visible; }
 .lib-name { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--ink); line-height: 1.25; }
 .lib-sub { display: block; font-size: var(--fs-xs); color: var(--ink-3); line-height: 1.3; }
 .lib-card-add {
@@ -951,9 +951,8 @@ table.data tbody tr:hover { background: var(--surface-2); }
 /* ── Visuelle Bibliothek (Kategorien + Vorschauen) ─────────────────────────── */
 .lib-cats {
   display: flex; gap: 2px; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line);
-  overflow-x: auto; scrollbar-width: none; flex: none;
+  flex-wrap: wrap; row-gap: var(--s1); flex: none;
 }
-.lib-cats::-webkit-scrollbar { display: none; }
 .lib-cat {
   display: inline-flex; align-items: center; gap: 5px;
   height: 30px; padding: 0 12px; border-radius: var(--r-full);
