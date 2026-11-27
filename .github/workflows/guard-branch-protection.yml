@@ -3,17 +3,15 @@
 # Hintergrund: Die Pflicht-Check-Namen im Ruleset "Protect main" sind die
 # Job-Namen aus ci.yml. Wird dort ein Job umbenannt oder ein Gate-Schritt
 # entfernt (z. B. das Bundle-Budget), bliebe das Ruleset formal erfüllt,
-# obwohl eine Prüfung verschwunden ist. Dieser Workflow macht beides sichtbar:
+# obwohl eine Prüfung verschwunden ist. Dieser Workflow macht das sichtbar und
+# prüft zusätzlich, ob der Schutz auf main tatsächlich WIRKT.
 #
-#   1. die Prüflogik des Ruleset-Skripts (Selbsttest, ohne GitHub-Rechte)
-#   2. die Gate-Schritte in ci.yml (Typecheck, Lint, Tests, Build, Budget, E2E)
-#   3. den Live-Zustand des Rulesets, sofern es bereits angewendet wurde
-#
-# Bewusst NICHT als Pflicht-Check im Ruleset eingetragen: Der Check-Name
-# existiert erst, nachdem dieser Workflow auf main gemerged ist; als Pflicht
-# eingetragen würde er den ersten Merge blockieren. Nach dem Merge kann er
-# mit einer Zeile in .github/rulesets/protect-main.json zu den Pflicht-Checks
-# hinzugefügt werden (siehe docs/engineering/branch-protection.md §7).
+# Dieser Job ist selbst ein Pflicht-Check im Ruleset. Das ist zulässig, weil er
+# bereits bei Pull Requests läuft, bevor das Ruleset existiert. Damit der erste
+# Merge nicht dauerhaft blockiert wird, gilt eine Vorbedingung: Solange der
+# Branch-Schutz noch nicht aktiv ist, sind die Regel-Prüfungen "noch nicht
+# angewendet" und der Job bleibt grün. Erst wenn das Ruleset aktiv ist,
+# verlangt der Wächter dessen vollständige Wirkung.
 name: Branch-Schutz-Wächter
 
 on:
@@ -39,21 +37,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prüflogik selbst testen (Soll-Zustand + 17 Abweichungen)
+      - name: Prüflogik selbst testen (Soll-Zustand + Abweichungen)
         run: ./.github/rulesets/selftest.sh
 
-      - name: Soll-Datei strukturell prüfen
+      - name: Python für Schema-Prüfung
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Payload gegen offizielles GitHub-Schema prüfen
         run: |
           set -euo pipefail
-          f=.github/rulesets/protect-main.json
-          jq -e . "$f" >/dev/null
-          test "$(jq -r .enforcement "$f")" = "active"
-          test "$(jq -c '.conditions.ref_name.include' "$f")" = '["refs/heads/main"]'
-          test "$(jq -c '.conditions.ref_name.exclude' "$f")" = '[]'
-          test "$(jq -c '.bypass_actors | map("\(.actor_type):\(.actor_id)")' "$f")" = '["RepositoryRole:5"]'
-          test "$(jq -c '.rules[] | select(.type=="pull_request") | .parameters.required_approving_review_count' "$f")" = "0"
-          test "$(jq -c '.rules[] | select(.type=="pull_request") | .parameters.allowed_merge_methods' "$f")" = '["squash"]'
-          echo "Soll-Datei entspricht der dokumentierten Konfiguration."
+          python3 -m pip install --quiet jsonschema
+          python3 .github/rulesets/schema-check.py
 
       - name: Gate-Schritte in ci.yml unverändert vorhanden
         run: |
@@ -77,12 +73,16 @@ jobs:
               fail=1
             fi
           done
-          # Job-Namen sind die Pflicht-Check-Namen im Ruleset.
+          # Job-Namen sind die Pflicht-Check-Namen im Ruleset. Ein Pflicht-Check
+          # kann aus JEDEM Workflow stammen (der Wächter selbst ist einer),
+          # deshalb wird über alle Workflow-Dateien gesucht — aber nur in
+          # diesen, nicht im ganzen Repo.
           while IFS= read -r ctx; do
-            if grep -qF -- "name: $ctx" "$f"; then
-              echo "ok      Job-Name vorhanden: $ctx"
+            if grep -lF -- "name: $ctx" .github/workflows/*.yml >/dev/null 2>&1; then
+              where="$(grep -lF -- "name: $ctx" .github/workflows/*.yml | xargs -n1 basename | tr '\n' ' ')"
+              echo "ok      Job-Name vorhanden: $ctx ($where)"
             else
-              echo "::error file=.github/workflows/ci.yml::Job '$ctx' fehlt — Pflicht-Check im Ruleset würde nie erfüllt"
+              echo "::error::Job '$ctx' fehlt in .github/workflows/ — Pflicht-Check im Ruleset würde nie erfüllt"
               fail=1
             fi
           done < <(jq -r '.rules[] | select(.type=="required_status_checks")
@@ -90,15 +90,68 @@ jobs:
                    .github/rulesets/protect-main.json)
           exit "$fail"
 
-      - name: Live-Zustand des Rulesets prüfen (nur wenn vorhanden)
+      - name: Wirkung des Branch-Schutzes auf main prüfen
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Solange das Ruleset noch nicht angewendet wurde, ist das kein
-          # Fehler — es wird ausdrücklich darauf hingewiesen.
-          if [ "$(gh api "repos/${{ github.repository }}/rulesets" --jq 'length' 2>/dev/null || echo 0)" = "0" ]; then
-            echo "::notice::Ruleset 'Protect main' ist noch nicht angewendet. Anwenden mit .github/rulesets/apply-protect-main.sh (benötigt Administration: write)."
+          # GET /rules/branches/main braucht nur Metadata:read und liefert die
+          # von GitHub tatsächlich angewendeten Regeln — der stärkere Nachweis
+          # gegenüber dem Lesen der gespeicherten Soll-Datei.
+          repo="${{ github.repository }}"
+          effective="$(gh api "repos/$repo/rules/branches/main")"
+          count="$(jq 'length' <<<"$effective")"
+
+          if [ "$count" = "0" ]; then
+            # Vorbedingung noch nicht erfüllt: Schutz ist noch nicht angewendet.
+            echo "::notice::Branch-Schutz ist noch nicht aktiv (0 wirksame Regeln). Anwenden mit .github/rulesets/apply-protect-main.sh — benötigt Administration: write."
             exit 0
           fi
-          ./.github/rulesets/apply-protect-main.sh --verify
+
+          echo "Wirksame Regeln auf main:"
+          jq -r '.[] | "  - \(.type) (ruleset \(.ruleset_source // "?"))"' <<<"$effective"
+
+          fail=0
+          has() { jq -e --arg t "$1" '[.[].type] | index($t)' <<<"$effective" >/dev/null; }
+
+          for rule in pull_request required_status_checks non_fast_forward deletion; do
+            if has "$rule"; then
+              echo "ok      wirksam: $rule"
+            else
+              echo "::error::Regel '$rule' ist auf main NICHT wirksam."
+              fail=1
+            fi
+          done
+
+          # Genau die Pflicht-Checks, die in der Soll-Datei stehen.
+          want="$(jq -c '[.rules[] | select(.type=="required_status_checks")
+                          | .parameters.required_status_checks[].context] | sort' \
+                   .github/rulesets/protect-main.json)"
+          have="$(jq -c '[.[] | select(.type=="required_status_checks")
+                          | .parameters.required_status_checks[].context] | sort' <<<"$effective")"
+          if [ "$want" = "$have" ]; then
+            echo "ok      wirksame Pflicht-Checks: $have"
+          else
+            echo "::error::wirksame Pflicht-Checks $have, erwartet $want"
+            fail=1
+          fi
+
+          # Nur Squash wirksam?
+          merge="$(jq -c '[.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods // ["alle"]] | .[0]' <<<"$effective")"
+          if [ "$merge" = '["squash"]' ]; then
+            echo "ok      wirksam nur Squash-Merge"
+          else
+            echo "::error::wirksam erlaubte Merge-Verfahren: $merge (erwartet [\"squash\"])"
+            fail=1
+          fi
+
+          # 0 Freigaben wirksam?
+          approvals="$(jq -r '[.[] | select(.type=="pull_request") | .parameters.required_approving_review_count] | .[0] // "FEHLT"' <<<"$effective")"
+          if [ "$approvals" = "0" ]; then
+            echo "ok      wirksam 0 erforderliche Freigaben"
+          else
+            echo "::error::wirksam erforderliche Freigaben: $approvals (erwartet 0)"
+            fail=1
+          fi
+
+          exit "$fail"

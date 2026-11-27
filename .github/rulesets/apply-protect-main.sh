@@ -18,6 +18,11 @@
 # sich die Prüflogik ohne Administration-Rechte vollständig testen
 # (siehe .github/rulesets/selftest.sh).
 #
+# Drei Nachweisebenen:
+#   1. Payload  — schema-check.py gegen das offizielle GitHub-OpenAPI-Schema
+#   2. Gespeichert — GET /rulesets/{id}
+#   3. Wirksam  — GET /rules/branches/main (effektive Regeln, ohne Schreibrechte)
+#
 # Wichtig: PUT /rulesets/{id} ersetzt das komplette Objekt. Die Soll-Datei ist
 # daher die einzige Wahrheit; vorhandene Regeln werden nicht blind
 # überschrieben, sondern vorher gelesen und gemeldet (--verify).
@@ -74,6 +79,9 @@ _stub_gh() {
       jq "$jqf" "$STUB_DIR/created.json" ;;
     *)
       case "$path" in
+        repos/*/rules/branches/*) file="$STUB_DIR/branch-rules.json" ;;
+        repos/*/commits/*/check-runs) file="$STUB_DIR/check-runs.json" ;;
+        repos/*/commits/*) file="$STUB_DIR/commit.json" ;;
         repos/*/rulesets) file="$STUB_DIR/rulesets.json" ;;
         repos/*/rulesets/*) file="$STUB_DIR/ruleset.json" ;;
         repos/*) file="$STUB_DIR/repo.json" ;;
@@ -184,6 +192,74 @@ jq -e '[.rules[].type] | index("non_fast_forward")' <<<"$LIVE" >/dev/null \
   && ok "Force-Push blockiert (non_fast_forward)" || bad "non_fast_forward fehlt — Force-Push erlaubt"
 jq -e '[.rules[].type] | index("deletion")' <<<"$LIVE" >/dev/null \
   && ok "Loeschen von main blockiert (deletion)" || bad "deletion fehlt — main loeschbar"
+
+# 6b. Wirkungsprüfung ohne Schreibrechte.
+#     GET /rules/branches/{branch} liefert die von GitHub tatsächlich
+#     angewendeten Regeln ("effective rules") und braucht nur Metadata:read —
+#     es funktioniert also auch mit GITHUB_TOKEN im CI und sogar anonym.
+#     Das ist der stärkere Nachweis als das Lesen der gespeicherten Soll-Datei:
+#     er zeigt, was GitHub wirklich durchsetzt.
+EFFECTIVE="$(_gh ro "repos/$REPO/rules/branches/main" 2>/dev/null || echo "__FEHLER__")"
+if [[ "$EFFECTIVE" == "__FEHLER__" ]]; then
+  bad "effektive Regeln fuer main nicht lesbar (GET /rules/branches/main)"
+else
+  eff_has() { jq -e --arg t "$1" '[.[].type] | index($t)' <<<"$EFFECTIVE" >/dev/null 2>&1; }
+  echo "--- Effektiv angewendet auf main (GitHub-Sicht) ---"
+  if ! eff_has pull_request; then
+    bad "main ist NICHT geschuetzt: keine pull_request-Regel wirksam"
+  elif ! eff_has required_status_checks; then
+    bad "Pflicht-Checks sind auf main NICHT wirksam"
+  else
+    ok "main ist geschuetzt: pull_request + required_status_checks wirksam"
+    # Genau die geforderten Check-Namen müssen wirksam sein.
+    eff_checks="$(jq -c '[.[] | select(.type=="required_status_checks")
+                          | .parameters.required_status_checks[].context] | sort' <<<"$EFFECTIVE")"
+    want_checks="$(jq -c '[.rules[] | select(.type=="required_status_checks")
+                           | .parameters.required_status_checks[].context] | sort' <<<"$WANT")"
+    [[ "$eff_checks" == "$want_checks" ]] \
+      && ok "wirksame Pflicht-Checks = $(jq -r 'join(" | ")' <<<"$eff_checks")" \
+      || bad "wirksame Pflicht-Checks = $eff_checks (erwartet $want_checks)"
+
+    # Nur Squash? (Feld fehlt, wenn GitHub die Voreinstellung nicht mitschickt.)
+    eff_merge="$(jq -c '[.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods // ["alle"]] | .[0]' <<<"$EFFECTIVE")"
+    [[ "$eff_merge" == '["squash"]' ]] \
+      && ok "wirksam erlaubte Merge-Verfahren = [squash]" \
+      || bad "wirksam erlaubte Merge-Verfahren = $eff_merge (erwartet [\"squash\"])"
+
+    # 0 Freigaben wirksam?
+    eff_appr="$(jq -r '[.[] | select(.type=="pull_request") | .parameters.required_approving_review_count] | .[0] // "FEHLT"' <<<"$EFFECTIVE")"
+    [[ "$eff_appr" == "0" ]] \
+      && ok "wirksam erforderliche Freigaben = 0" \
+      || bad "wirksam erforderliche Freigaben = $eff_appr (erwartet 0)"
+
+    # Bootstrapping: Jeder Pflicht-Check muss auf main schon einmal gelaufen
+    # sein, sonst blockiert er den ersten PR dauerhaft. Geprueft ueber die
+    # Check-Historie des aktuellen main-Commits.
+    MAIN_SHA="$(_gh ro "repos/$REPO/commits/main" --jq .sha 2>/dev/null || echo "")"
+    if [[ -n "$MAIN_SHA" ]]; then
+      echo "--- Pflicht-Checks auf main belegt (Bootstrapping) ---"
+      SEEN="$(_gh ro "repos/$REPO/commits/$MAIN_SHA/check-runs" --jq '[.check_runs[].name]' 2>/dev/null || echo '[]')"
+      while IFS= read -r c; do
+        [[ -n "$c" ]] || continue
+        if jq -e --arg c "$c" 'index($c)' <<<"$SEEN" >/dev/null 2>&1; then
+          ok "Check '$c' ist auf main bereits gelaufen"
+        else
+          bad "Check '$c' ist auf main noch NIE gelaufen — als Pflicht blockiert er jeden PR (erst Workflow mergen, dann als Pflicht eintragen)"
+        fi
+      done < <(jq -r '.rules[] | select(.type=="required_status_checks")
+                      | .parameters.required_status_checks[].context' <<<"$WANT")
+    fi
+  fi
+  eff_has non_fast_forward \
+    && ok "wirksam: Force-Push blockiert" || bad "wirksam: Force-Push NICHT blockiert (non_fast_forward fehlt)"
+  eff_has deletion \
+    && ok "wirksam: Loeschen blockiert" || bad "wirksam: Loeschen NICHT blockiert (deletion fehlt)"
+  # Herkunft der Regeln: muss das Repository-Ruleset sein, keine Altregel.
+  eff_src="$(jq -c '[.[] | select(.ruleset_source_type != null) | .ruleset_source_type] | unique' <<<"$EFFECTIVE")"
+  [[ "$eff_src" == '["Repository"]' ]] \
+    && ok "Regeln stammen aus einem Repository-Ruleset" \
+    || printf 'HINWEIS    Regelquellen: %s (erwartet ["Repository"])\n' "$eff_src"
+fi
 
 # 7. Bypass — ausschließlich die Admin-Rolle, als Notfallausnahme.
 #    Achtung: GitHub liefert das Feld "bypass_actors" nur an Aufrufer mit

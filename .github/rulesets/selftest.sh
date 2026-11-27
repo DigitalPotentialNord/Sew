@@ -30,6 +30,16 @@ make_stub() {
   jq "$filter" "$DESIRED" > "$dir/ruleset.json"
   jq -n '[{"id":4242,"name":"Protect main"}]' > "$dir/rulesets.json"
   jq -n '{allow_squash_merge:true, allow_merge_commit:false, allow_rebase_merge:false}' > "$dir/repo.json"
+  # Effektive Regeln (GET /rules/branches/main) aus der Soll-Datei ableiten,
+  # so wie GitHub sie anwenden würde.
+  jq '[.rules[] | . + {ruleset_source_type:"Repository", ruleset_source:"DigitalPotentialNord/Sew", ruleset_id:4242}]' \
+    "$dir/ruleset.json" > "$dir/branch-rules.json"
+  # Bootstrapping-Stub: alle Pflicht-Checks sind auf main schon gelaufen.
+  jq -n --slurpfile d "$DESIRED" '{sha:"main-sha"}' > "$dir/commit.json"
+  jq -n --slurpfile d "$DESIRED" \
+    '{check_runs: [$d[0].rules[] | select(.type=="required_status_checks")
+                  | .parameters.required_status_checks[] | {name: .context, conclusion: "success"}]}' \
+    > "$dir/check-runs.json"
 }
 
 # Erwartung: Läuft --verify gegen den Stub sauber durch (Exit 0)?
@@ -147,6 +157,64 @@ fi
 # Gegenprobe: vorhanden, aber leer, ist ein echter Mangel.
 make_stub "$WORK/emptybypass" '.bypass_actors = []'
 expect_bad "leeres bypass_actors ist ein Fehler" "$WORK/emptybypass" "Bypass ist leer"
+
+echo
+echo "4c) Wirkungspruefung (GET /rules/branches/main, ohne Schreibrechte)"
+# Das Ruleset kann korrekt gespeichert sein und trotzdem nicht wirken. Genau
+# das muss auffallen, weil die Wirkung das ist, was zaehlt.
+
+make_stub "$WORK/e1" '.'
+jq 'map(select(.type != "pull_request"))' "$WORK/e1/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e1/branch-rules.json"
+expect_bad "main wirkt ungeschuetzt (keine PR-Regel)" "$WORK/e1" "NICHT geschuetzt"
+
+make_stub "$WORK/e2" '.'
+jq 'map(select(.type != "required_status_checks"))' "$WORK/e2/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e2/branch-rules.json"
+expect_bad "Pflicht-Checks wirken nicht" "$WORK/e2" "NICHT wirksam"
+
+make_stub "$WORK/e3" '.'
+jq 'map(if .type=="required_status_checks" then .parameters.required_status_checks |= .[:1] else . end)' \
+  "$WORK/e3/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e3/branch-rules.json"
+expect_bad "ein wirksamer Pflicht-Check fehlt" "$WORK/e3" "wirksame Pflicht-Checks"
+
+make_stub "$WORK/e4" '.'
+jq 'map(if .type=="pull_request" then .parameters.allowed_merge_methods = ["squash","merge"] else . end)' \
+  "$WORK/e4/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e4/branch-rules.json"
+expect_bad "Merge Commit wirkt erlaubt" "$WORK/e4" "Merge-Verfahren"
+
+make_stub "$WORK/e5" '.'
+jq 'map(if .type=="pull_request" then .parameters.required_approving_review_count = 1 else . end)' \
+  "$WORK/e5/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e5/branch-rules.json"
+expect_bad "menschliche Freigabe wirkt erzwungen" "$WORK/e5" "wirksam erforderliche Freigaben = 1"
+
+make_stub "$WORK/e6" '.'
+jq 'map(select(.type != "non_fast_forward"))' "$WORK/e6/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e6/branch-rules.json"
+expect_bad "Force-Push wirkt erlaubt" "$WORK/e6" "Force-Push NICHT blockiert"
+
+make_stub "$WORK/e7" '.'
+jq 'map(select(.type != "deletion"))' "$WORK/e7/branch-rules.json" > "$WORK/t" && mv "$WORK/t" "$WORK/e7/branch-rules.json"
+expect_bad "Loeschen wirkt erlaubt" "$WORK/e7" "Loeschen NICHT blockiert"
+
+# Gegenprobe: gar keine Regeln wirksam = der Zustand von heute.
+mkdir -p "$WORK/e8"
+cp "$WORK/good/ruleset.json" "$WORK/good/rulesets.json" "$WORK/good/repo.json" "$WORK/e8/"
+echo '[]' > "$WORK/e8/branch-rules.json"
+expect_bad "keine einzige Regel wirksam (heutiger Zustand)" "$WORK/e8" "NICHT geschuetzt"
+
+echo
+echo "4d) Bootstrapping: Pflicht-Check ohne Lauf auf main blockiert jeden PR"
+# Genau der Fall, der den ersten Merge dauerhaft blockieren würde.
+make_stub "$WORK/b1" '.'
+jq '.check_runs |= map(select(.name != "Ruleset & Gate-Integrität"))' \
+  "$WORK/b1/check-runs.json" > "$WORK/t" && mv "$WORK/t" "$WORK/b1/check-runs.json"
+expect_bad "Waechter-Check lief noch nie auf main" "$WORK/b1" "noch NIE gelaufen"
+
+make_stub "$WORK/b2" '.'
+jq '.check_runs |= map(select(.name != "Abnahmetests (Playwright)"))' \
+  "$WORK/b2/check-runs.json" > "$WORK/t" && mv "$WORK/t" "$WORK/b2/check-runs.json"
+expect_bad "Playwright lief noch nie auf main" "$WORK/b2" "noch NIE gelaufen"
+
+make_stub "$WORK/b3" '.'
+expect_ok "alle Pflicht-Checks sind auf main belegt" "$WORK/b3"
 
 echo
 echo "5) Fehlendes Ruleset ist ein Fehler, kein stiller Erfolg"

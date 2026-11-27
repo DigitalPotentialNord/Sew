@@ -40,6 +40,10 @@
           {
             "context": "Abnahmetests (Playwright)",
             "integration_id": 15368
+          },
+          {
+            "context": "Ruleset & Gate-Integrität",
+            "integration_id": 15368
           }
         ]
       }
