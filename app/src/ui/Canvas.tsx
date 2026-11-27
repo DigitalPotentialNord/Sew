@@ -135,11 +135,20 @@ export function Canvas(): JSX.Element {
   }, [autoFit, fit]);
 
   useEffect(() => {
+    const isTypingOrInteractive = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
+      // Native Bedienelemente und ARIA-Rollen behalten die Leertaste (Aktivierung).
+      if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement) return true;
+      if (target.isContentEditable) return true;
+      return target.closest('[role="button"], [role="tab"], [role="menu"], [role="listbox"], [role="dialog"]') !== null;
+    };
     const down = (e: KeyboardEvent): void => {
-      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) {
-        e.preventDefault();
-        setSpaceDown(true);
-      }
+      if (e.code !== 'Space' || isTypingOrInteractive(e.target)) return;
+      // Während des Starter-Dialogs darf die Canvas (hinter dem Overlay) nicht mitschwenken.
+      if (useStore.getState().session.startOpen) return;
+      e.preventDefault();
+      setSpaceDown(true);
     };
     const up = (e: KeyboardEvent): void => {
       if (e.code === 'Space') setSpaceDown(false);
