@@ -19,6 +19,7 @@ Commit wie die zugehörige Doku.
 | [export-system.md](export-system.md) | SVG, Druck-HTML, A4-Kacheln, PDF (pdf-lib), Maßhaltigkeit |
 | [testing-strategy.md](testing-strategy.md) | Testpyramide, Golden-Hashes, Vorlagen-Invarianten, E2E-Abnahme |
 | [architecture-audit.md](architecture-audit.md) | Industrie-Niveau-Prüfung 26.11.2026: Findings, Fixes, offene Punkte |
+| [branch-protection.md](branch-protection.md) | Schutz von `main`: Ruleset `Protect main`, Pflicht-Checks, Admin-Notfall-Bypass, Squash-Merge |
 
 ## Verbindliche Regeln (Kurzfassung)
 

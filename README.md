@@ -191,6 +191,8 @@ Tests und Hashes hängen daran).
 - **[docs/PHASE-3.md](docs/PHASE-3.md)** — was gebaut ist, was nicht, und warum.
 - **[docs/engineering/README.md](docs/engineering/README.md)** — Übersicht der
   technischen Dokumente inkl. Abweichungen Code ↔ Spezifikation.
+- **[docs/engineering/branch-protection.md](docs/engineering/branch-protection.md)** —
+  wie `main` geschützt ist (Ruleset, Pflicht-Checks, Squash-Merge, Notfall-Bypass).
 
 ### Spezifikation (`docs/`)
 - `product/prd.md` — Anforderungen, Regeln (V-G/V-M), Abnahmekriterien.
