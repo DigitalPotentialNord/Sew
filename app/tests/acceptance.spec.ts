@@ -410,9 +410,11 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     const mod = page.locator('.canvas-svg g.mod').last();
     const shape = mod.locator('rect.mod-shape');
     const wBefore = await shape.getAttribute('width');
-    // Auf .mod-shape klicken (nicht auf <g>), damit der Pointer-Event das
-    // Modul sicher trifft — das <g>-Zentrum kann neben der Rect liegen.
-    await shape.click({ force: true });
+    // Modul selektieren: Maus an das Zentrum der mod-shape-Rect bewegen
+    // und klicken. Danach .mod.sel verifizieren, bevor 'r' gedrückt wird.
+    const box = await shape.boundingBox();
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await expect(mod).toHaveClass(/sel/);
     await page.keyboard.press('r');
     // Bei 90°-Rotation tauschen drawW/drawH — das width-Attribut der
     // mod-shape-Rect ändert sich (m.rect.w → m.rect.h).
