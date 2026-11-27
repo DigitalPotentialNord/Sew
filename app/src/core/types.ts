@@ -49,6 +49,9 @@ export interface PieceSpec {
   /** Nähmaß ohne Nahtzugabe (nur bei kind==='cut' sinnvoll). */
   readonly netW: Mm;
   readonly netH: Mm;
+  /** Optionaler Versatz des Nähfelds innerhalb des Zuschnitts (für einseitige Säume/Bruchkanten). */
+  readonly netX?: Mm;
+  readonly netY?: Mm;
   readonly count: number;
   readonly material: MaterialKind;
   readonly grain: GrainDirection;

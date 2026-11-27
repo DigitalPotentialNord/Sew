@@ -3,7 +3,7 @@
  * `construct()` ist memoisiert über den Projekt-Hash.
  */
 import { create } from 'zustand';
-import { construct, type Construction, type Project } from '../core/construction';
+import { construct, type Construction, type Project, type Side } from '../core/construction';
 import { applyFix, findingKey } from '../core/fixes';
 import { t } from '../i18n/de';
 import {
@@ -18,6 +18,7 @@ import {
   loadLibrary,
   makeInstance,
   moveInstance,
+  moveToSide,
   newId,
   nowIso,
   removeInstance,
@@ -68,6 +69,10 @@ interface EditorSession {
   readonly guides: readonly { readonly axis: 'x' | 'y'; readonly at: number }[];
   /** Sitzung: gesetzt, sobald der Nutzer den Zoom selbst bestimmt hat. */
   readonly zoomTouched: boolean;
+  /** Editor-Redesign: 'simple' = textile Oberfläche ohne CAD-Beiwerk, 'expert' = mit Raster/Maßen. */
+  readonly mode: 'simple' | 'expert';
+  /** Starter-Erstsbesuch; false, sobald der Nutzer eine Wahl getroffen oder übersprungen hat. */
+  readonly startOpen: boolean;
 }
 
 interface StoreState {
@@ -86,8 +91,9 @@ interface StoreState {
 
   // Actions
   setPar: (updater: (p: Project) => Project, opts?: { undoable?: boolean }) => void;
-  addModule: (typeId: ModuleTypeId, rowId?: string) => string;
+  addModule: (typeId: ModuleTypeId, rowId?: string, side?: Side) => string;
   moveModule: (id: string, rowId: string, index: number) => void;
+  moveToSide: (id: string, side: Side) => void;
   duplicate: (id: string) => void;
   remove: (ids: readonly string[]) => void;
   rotate: (id: string) => void;
@@ -100,6 +106,8 @@ interface StoreState {
   toggleGrid: () => void;
   toggleSnap: () => void;
   setView: (v: EditorSession['view']) => void;
+  setMode: (m: EditorSession['mode']) => void;
+  setStartOpen: (v: boolean) => void;
   setPropsOpen: (v: boolean) => void;
   setLibOpen: (v: boolean) => void;
   setWarnOpen: (v: boolean) => void;
@@ -138,11 +146,13 @@ const emptySession: EditorSession = {
   snap: true,
   gridMm: 5,
   view: 'editor',
-  propsOpen: true,
+  propsOpen: false,
   libOpen: false,
   warnOpen: false,
   dismissed: [],
   guides: [],
+  mode: 'simple',
+  startOpen: false,
 };
 
 /** Memo: derselbe Projekt-Hash → dasselbe Ergebnis. */
@@ -158,16 +168,21 @@ export function compute(p: Project): Construction {
   return value;
 }
 
-function initialProject(): Project {
-  const stored = typeof localStorage !== 'undefined' ? loadCurrent() : null;
-  if (stored) return stored;
-  return buildTemplate('schmuck');
+function initialProject(): Project | null {
+  // Erstsbesuch: kein gespeichertes Projekt → null signalisiert „Starter öffnen".
+  // Die konkrete Vorlage (schmuck) wird als Hintergrund geladen, damit der
+  // Editor hinter dem Starter nicht leer ist.
+  return typeof localStorage !== 'undefined' ? loadCurrent() : null;
 }
 
 let toastId = 0;
 
 export const useStore = create<StoreState>((set, get) => {
-  const project = initialProject();
+  const storedOnEntry = initialProject();
+  const project = storedOnEntry ?? buildTemplate('schmuck');
+  // Erster Besuch ohne gespeichertes Projekt → Starter öffnen. Wer schon ein
+  // Projekt hat, landet direkt im Editor (kein again-and-again-Dialog).
+  const initialSession: EditorSession = { ...emptySession, startOpen: storedOnEntry === null };
   // Konservativ: fragt auch dann, wenn seit dem Sessionbeginn editiert (und danach
   // gespeichert) wurde — lieber einmal zu viel fragen als Unbezahltes zu löschen.
   // `past.length > 0` überlebt auch ein zwischenzeitliches Undo nicht: nach beliebig
@@ -190,7 +205,7 @@ export const useStore = create<StoreState>((set, get) => {
     past: [],
     future: [],
     construction: compute(project),
-    session: emptySession,
+    session: initialSession,
     library: typeof localStorage !== 'undefined' ? loadLibrary() : [],
     saved: false,
     toasts: [],
@@ -213,10 +228,11 @@ export const useStore = create<StoreState>((set, get) => {
       });
     },
 
-    addModule: (typeId, rowId) => {
+    addModule: (typeId, rowId, side) => {
       const p = get().project;
       const targetRow = rowId ?? p.rows[0]!.id;
-      const inst = makeInstance(typeId, targetRow);
+      // `side` ist eine echte Modellentscheidung (v3), kein Visualisierungs-Flag.
+      const inst = { ...makeInstance(typeId, targetRow), side: side ?? 'left' };
       get().setPar((prev) => ({ ...prev, modules: [...prev.modules, inst], updatedAt: nowIso() }));
       set({ session: { ...get().session, selection: [inst.id] } });
       return inst.id;
@@ -224,6 +240,10 @@ export const useStore = create<StoreState>((set, get) => {
 
     moveModule: (id, rowId, index) => {
       get().setPar((p) => moveInstance(p, id, rowId, index));
+    },
+
+    moveToSide: (id, side) => {
+      get().setPar((p) => moveToSide(p, id, side));
     },
 
     duplicate: (id) => {
@@ -273,6 +293,8 @@ export const useStore = create<StoreState>((set, get) => {
     toggleGrid: () => set({ session: { ...get().session, grid: !get().session.grid } }),
     toggleSnap: () => set({ session: { ...get().session, snap: !get().session.snap } }),
     setView: (v) => set({ session: { ...get().session, view: v } }),
+    setMode: (m) => set({ session: { ...get().session, mode: m } }),
+    setStartOpen: (v) => set({ session: { ...get().session, startOpen: v } }),
     setPropsOpen: (v) => set({ session: { ...get().session, propsOpen: v } }),
     setLibOpen: (v) => set({ session: { ...get().session, libOpen: v } }),
     setWarnOpen: (v) => set({ session: { ...get().session, warnOpen: v } }),

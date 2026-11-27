@@ -32,42 +32,44 @@ export function MaterialsView(): JSX.Element {
         </div>
 
         <Panel flush>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th style={{ textAlign: 'right' }}>Menge</th>
-                <th>Art</th>
-                <th>{t('mat.tab.basis')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((m, i) => (
-                <tr key={`${m.kind}-${m.spec}-${i}`}>
-                  <td>
-                    <div style={{ fontWeight: 500 }}>{labelOf(m)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.spec}</div>
-                  </td>
-                  <td className="num" style={{ fontWeight: 600 }}>
-                    {m.display ?? formatAmount(m.amount, m.unit)}
-                  </td>
-                  <td>
-                    <span className={`badge ${m.certainty === 'exact' ? 'exact' : 'est'}`}>
-                      {m.certainty === 'exact' ? t('mat.tab.exact') : t('mat.tab.estimated')}
-                    </span>
-                  </td>
-                  <td style={{ color: 'var(--ink-2)', fontSize: 11.5 }}>{t(m.basisKey, m.basisValues)}</td>
-                </tr>
-              ))}
-              {sorted.length === 0 ? (
+          <div className="table-scroll">
+            <table className="data">
+              <thead>
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 24 }}>
-                    {t('mat.tab.empty')}
-                  </td>
+                  <th>Material</th>
+                  <th style={{ textAlign: 'right' }}>Menge</th>
+                  <th>Art</th>
+                  <th>{t('mat.tab.basis')}</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sorted.map((m, i) => (
+                  <tr key={`${m.kind}-${m.spec}-${i}`}>
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{labelOf(m)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.spec}</div>
+                    </td>
+                    <td className="num" style={{ fontWeight: 600 }}>
+                      {m.display ?? formatAmount(m.amount, m.unit)}
+                    </td>
+                    <td>
+                      <span className={`badge ${m.certainty === 'exact' ? 'exact' : 'est'}`}>
+                        {m.certainty === 'exact' ? t('mat.tab.exact') : t('mat.tab.estimated')}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--ink-2)', fontSize: 11.5 }}>{t(m.basisKey, m.basisValues)}</td>
+                  </tr>
+                ))}
+                {sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 24 }}>
+                      {t('mat.tab.empty')}
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </Panel>
 
         <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
@@ -103,39 +105,41 @@ export function MaterialsView(): JSX.Element {
           </Panel>
         ) : null}
 
-        <Panel title="Schnittteile">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Teil</th>
-                <th style={{ textAlign: 'right' }}>Anzahl</th>
-                <th style={{ textAlign: 'right' }}>Zuschnitt</th>
-                <th style={{ textAlign: 'right' }}>Nähmaß</th>
-                <th>Material</th>
-                <th>Fadenlauf</th>
-              </tr>
-            </thead>
-            <tbody>
-              {c.pieces
-                .filter((p) => p.kind === 'cut')
-                .map((p) => (
-                  <tr key={p.id}>
-                    <td>{t(p.nameKey)}</td>
-                    <td className="num">{p.count}×</td>
-                    <td className="num">
-                      {p.w} × {p.h}
-                    </td>
-                    <td className="num" style={{ color: 'var(--ink-3)' }}>
-                      {p.netW} × {p.netH}
-                    </td>
-                    <td>{t(`mat.${p.material}`)}</td>
-                    <td style={{ color: 'var(--ink-2)' }}>
-                      {p.grain === 'lengthwise' ? 'längs' : p.grain === 'crosswise' ? 'quer' : '—'}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+        <Panel title="Schnittteile" flush>
+          <div className="table-scroll">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Teil</th>
+                  <th style={{ textAlign: 'right' }}>Anzahl</th>
+                  <th style={{ textAlign: 'right' }}>Zuschnitt</th>
+                  <th style={{ textAlign: 'right' }}>Nähmaß</th>
+                  <th>Material</th>
+                  <th>Fadenlauf</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.pieces
+                  .filter((p) => p.kind === 'cut')
+                  .map((p) => (
+                    <tr key={p.id}>
+                      <td>{t(p.nameKey)}</td>
+                      <td className="num">{p.count}×</td>
+                      <td className="num">
+                        {p.w} × {p.h}
+                      </td>
+                      <td className="num" style={{ color: 'var(--ink-3)' }}>
+                        {p.netW} × {p.netH}
+                      </td>
+                      <td>{t(`mat.${p.material}`)}</td>
+                      <td style={{ color: 'var(--ink-2)' }}>
+                        {p.grain === 'lengthwise' ? 'längs' : p.grain === 'crosswise' ? 'quer' : '—'}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </Panel>
       </div>
     </div>
@@ -159,7 +163,7 @@ function FabricPlanSvg({
       width={width * scale}
       height={Math.max(60, height * scale)}
       viewBox={`0 0 ${width} ${Math.max(60, height)}`}
-      style={{ border: '1px solid var(--line)', borderRadius: 6, background: 'var(--surface-2)' }}
+      style={{ border: '1px solid var(--line)', borderRadius: 6, background: 'var(--surface-2)', maxWidth: '100%', height: 'auto' }}
       role="img"
       aria-label={t('mat.tab.plan')}
     >

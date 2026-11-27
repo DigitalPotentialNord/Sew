@@ -504,7 +504,7 @@ describe('Projektschema und Migration', () => {
       settings: { seamAllowanceMm: 10, fabricWidthMm: 1400, unit: 'mm' },
     };
     const migrated = migrate(legacy) as Record<string, unknown>;
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
     const res = validateProject(migrated);
     expect(res.ok).toBe(true);
     if (res.ok) {
@@ -540,6 +540,7 @@ describe('Unabhängigkeit von der Umgebung', () => {
               .sort()
               .map((k) => [k, m.params[k]]),
             rotation: m.rotation,
+            side: m.side,
           }))
           .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
         settings: p.settings,
@@ -658,5 +659,40 @@ describe('Mengenformat (eine Stelle)', () => {
     const p = withModules([makeInstance('M06', 'r1')]);
     const thread = construct(p).materials.find((m) => m.kind === 'thread')!;
     expect(thread.display).toMatch(/ m$/);
+  });
+});
+
+describe('Stoffbreite & Skalierungsstress (V-G-12 & 60 Module)', () => {
+  it('V-G-12 feuert, wenn ein Schnittteil breiter als die Stoffbreite ist', () => {
+    const p: Project = {
+      ...baseProject(),
+      base: { ...baseProject().base, widthMm: 500, spineWidthMm: 40 },
+      settings: { seamAllowanceMm: 10, fabricWidthMm: 900, unit: 'mm' },
+    };
+    const c = construct(p);
+    const f = c.findings.find((x) => x.ruleId === 'V-G-12');
+    expect(f).toBeDefined();
+    expect(f!.severity).toBe('warn');
+    expect(f!.fix?.kind).toBe('setFabricWidth');
+  });
+
+  it('60 Module (ca. 245 Operationen) bleiben azyklisch und konstruieren schnell', () => {
+    const tpl = buildTemplate('strick');
+    const mods: Instance[] = Array.from({ length: 60 }, (_, i) => ({
+      ...tpl.modules[i % tpl.modules.length]!,
+      id: `s_${i}`,
+    }));
+    const t0 = performance.now();
+    const c = construct({ ...tpl, modules: mods });
+    const dt = performance.now() - t0;
+    expect(c.operations.length).toBeGreaterThan(200);
+    expect(dt).toBeLessThan(500);
+    const pos = new Map(c.operations.map((o, i) => [o.id, i]));
+    for (const op of c.operations) {
+      for (const dep of op.dependsOn) {
+        const dp = pos.get(dep);
+        if (dp !== undefined) expect(dp).toBeLessThan(pos.get(op.id)!);
+      }
+    }
   });
 });

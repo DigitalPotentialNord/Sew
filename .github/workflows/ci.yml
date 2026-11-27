@@ -19,7 +19,10 @@ concurrency:
 jobs:
   check:
     name: Typecheck · Lint · Test · Build
-    runs-on: ubuntu-latest
+    # ubuntu-24.04 (noble) bewusst gepinnt: ubuntu-latest ist auf 26.04
+    # (resolute) umgezogen, für das Playwrights --with-deps noch keine
+    # apt-Pakete im Microsoft-Repository hat (403 Forbidden, Exit 100).
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: app
@@ -56,7 +59,7 @@ jobs:
 
   e2e:
     name: Abnahmetests (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: app
@@ -81,3 +84,47 @@ jobs:
 
       - name: Abnahmetests ausführen
         run: npx playwright test
+
+      - name: Fehlgeschlagene Tests als Annotationen melden
+        if: always()
+        working-directory: app
+        run: |
+          if [ -f test-results/results.json ]; then
+            node -e "
+            const r = require('./test-results/results.json');
+            const all = [];
+            function dig(s){
+              for (const sp of (s.specs||[])) {
+                for (const t of (sp.tests||[])) {
+                  const attempts = t.results||[];
+                  const last = attempts[attempts.length-1];
+                  if (last && ['failed','timedOut','interrupted'].includes(last.status)) {
+                    all.push({title: sp.title, file: s.file||sp.file||'', err: (last.error&&(last.error.message||last.error.value||JSON.stringify(last.error)))||last.status});
+                  }
+                }
+              }
+              for (const sub of (s.suites||[])) dig(sub);
+            }
+            (r.suites||[]).forEach(dig);
+            const stats = r.stats||{};
+            const total = stats.tests || stats.total || 0;
+            console.log('::notice::PW_STATS total=' + total + ' expected=' + (stats.expected||0) + ' unexpected=' + (stats.unexpected||0) + ' flaky=' + (stats.flaky||0) + ' skipped=' + (stats.skipped||0));
+            for (const f of all) {
+              const msg = 'PWFAIL: ' + f.title + ' | ' + String(f.err).slice(0,300);
+              console.log('::error file=' + (f.file||'playwright') + '::' + msg.replace(/\\n/g,' '));
+            }
+            if (all.length === 0 && (stats.unexpected||0) > 0) {
+              console.log('::error::PWFAIL: ' + (stats.unexpected||0) + ' tests failed but no details could be extracted from JSON. suites=' + (r.suites||[]).length);
+            }
+            "
+          else
+            echo "::error::No test-results/results.json found — Playwright may have crashed."
+          fi
+
+      - name: Test-Ergebnisse hochladen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (Pinned)
+        if: always()
+        with:
+          name: playwright-results
+          path: app/test-results/
+          retention-days: 14

@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPrintHtml, fileName, PAGE, tilePiece, timestampForFile, toSvg, totalPages, type PrintStrings } from '../core/export';
 import { construct } from '../core/construction';
+import { mm } from '../core/geometry';
 import { buildTemplate } from '../core/project';
 
 const strings: PrintStrings = {
@@ -213,5 +214,27 @@ describe('toSvg – Escaping (Defense-in-Depth)', () => {
     expect(svg.startsWith('<?xml version="1.0"')).toBe(true);
     expect(svg).toContain('</svg>');
     expect(svg.match(/<g /g)?.length).toBe(svg.match(/<\/g>/g)?.length);
+  });
+
+  it('instructionsOnly lässt Cover, Material und Kacheln weg und zeigt nur die Anleitung', () => {
+    const html = buildPrintHtml(
+      schmuck,
+      'Schmuck',
+      strings,
+      schmuck.materials.map((m) => ({ label: m.labelKey, amount: `${m.amount}`, certainty: m.certainty, basis: m.basisKey })),
+      schmuck.operations.map((o) => ({ index: o.index, phase: o.phase, text: o.titleKey })),
+      [],
+      { instructionsOnly: true },
+    );
+    expect(html).toContain('class="steps"');
+    expect(html).not.toContain('class="page cover"');
+    expect(html).not.toContain('class="tilebody"');
+    expect(html).not.toContain('<div class="cal-box">');
+    expect(html).not.toContain('<table class="material">');
+  });
+
+  it('tilePiece berücksichtigt usableH = 250 mm (nicht 267 mm) für Kopf- und Fußzeilen', () => {
+    const tall = { ...schmuck.pieces[0]!, w: mm(120), h: mm(255), kind: 'cut' as const };
+    expect(tilePiece(tall)).toHaveLength(2);
   });
 });

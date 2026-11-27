@@ -15,7 +15,8 @@ export default defineConfig({
     // damit der Editor ohne PDF-Export schnell lädt.
     rollupOptions: {
       output: {
-        manualChunks: (id: string) => (id.includes('pdf-lib') || id.includes('@pdf-lib') ? 'pdf' : undefined),
+        manualChunks: (id: string) =>
+          id.includes('pdf-lib') || id.includes('@pdf-lib') || id.endsWith('/src/core/pdf.ts') ? 'pdf' : undefined,
       },
     },
   },

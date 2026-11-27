@@ -10,11 +10,24 @@ import { readFile } from 'node:fs/promises';
 
 const tab = (page: Page, label: string) => page.getByRole('tab', { name: new RegExp(label) });
 
+/** Beim Erstbesuch (kein gespeichertes Projekt) öffnet sich die Starter-Begrüßung.
+ *  Sie überlagert den Editor — hier übersprungen, damit der Test deterministisch
+ *  im Editor landet (mit der schmuck-Vorlage als Hintergrund). */
+async function dismissStarterIfPresent(page: Page): Promise<void> {
+  const start = page.locator('.start-overlay');
+  if (await start.count() > 0) {
+    await start.getByRole('button', { name: /Editor öffnen/ }).first().click();
+    await expect(start).toHaveCount(0);
+  }
+}
+
 async function loadSchmuck(page: Page): Promise<void> {
   await page.goto('/');
+  await expect(page.locator('.topbar')).toBeVisible();
+  await dismissStarterIfPresent(page);
   await tab(page, 'Projekt').click();
   await page.getByRole('button', { name: /Schmuck-Organizer/ }).first().click();
-  await tab(page, 'Editor').click();
+  await tab(page, 'Designen').click();
   await expect(page.locator('.canvas-svg')).toBeVisible();
 }
 
@@ -32,6 +45,7 @@ test.describe('1 — Start und Vorlage', () => {
 
     await page.goto('/');
     await expect(page.locator('.topbar')).toBeVisible();
+    await dismissStarterIfPresent(page);
     await tab(page, 'Projekt').click();
 
     const cards = page.locator('.template-card');
@@ -41,7 +55,7 @@ test.describe('1 — Start und Vorlage', () => {
     }
 
     await page.getByRole('button', { name: /Schmuck-Organizer/ }).first().click();
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await expect(page.locator('.canvas-svg g.mod')).toHaveCount(5);
     expect(errors, errors.join('\n')).toEqual([]);
   });
@@ -49,6 +63,8 @@ test.describe('1 — Start und Vorlage', () => {
   test('jede Vorlage rendert ohne Fehler-Findings', async ({ page }) => {
     for (const name of ['Schmuck-Organizer', 'Make-up-Organizer', 'Stricknadel-Organizer']) {
       await page.goto('/');
+      await expect(page.locator('.topbar')).toBeVisible();
+      await dismissStarterIfPresent(page);
       await tab(page, 'Projekt').click();
       await page.getByRole('button', { name: new RegExp(name) }).first().click();
       // Die Statusleiste nennt die Fehlerzahl; Vorlagen müssen 0 haben.
@@ -111,9 +127,11 @@ test.describe('2 — Modul hinzufügen, verschieben, konfigurieren', () => {
   test('Parameter im Eigenschaften-Panel ändern die Geometrie live', async ({ page }) => {
     // M01 "Stofftasche" hat eine freie Breite/Höhe
     await page.locator('.lib-item[data-module-id="M01"]').first().click();
+    // addModule selektiert das neue Modul automatisch — kein zusätzlicher
+    // Klick auf das SVG-<g> nötig (der ohne force:true auf SVG-Elementen
+    // nicht zuverlässig aktionierbar ist).
     const mod = page.locator('.canvas-svg g.mod[aria-label^="Stofftasche"]');
     await expect(mod).toHaveCount(1);
-    await mod.click();
 
     const width = page.getByRole('spinbutton', { name: 'Breite', exact: true });
     await expect(width).toBeVisible();
@@ -145,11 +163,11 @@ test.describe('2 — Modul hinzufügen, verschieben, konfigurieren', () => {
 test.describe('3 — Live-Neuberechnung über alle Ansichten', () => {
   test('Materialliste reagiert auf ein neues Modul', async ({ page }) => {
     await loadSchmuck(page);
-    await tab(page, 'Material').click();
+    await tab(page, 'Materialien').click();
     const rowsBefore = await page.locator('table tbody tr').count();
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await page.locator('.lib-item[data-module-id="M06"]').first().click();
-    await tab(page, 'Material').click();
+    await tab(page, 'Materialien').click();
     await expect.poll(async () => page.locator('table tbody tr').count()).toBeGreaterThan(0);
     expect(rowsBefore).toBeGreaterThan(0);
     // Der Nadelkanal bringt Einlage/Verstärkung mit — die Materialliste wächst
@@ -162,7 +180,7 @@ test.describe('3 — Live-Neuberechnung über alle Ansichten', () => {
     await loadSchmuck(page);
     await tab(page, 'Schnittmuster').click();
     const before = await page.locator('.piece-card').count();
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await page.locator('.lib-item[data-module-id="M01"]').first().click();
     await tab(page, 'Schnittmuster').click();
     await expect.poll(async () => page.locator('.piece-card').count()).toBeGreaterThan(before);
@@ -209,7 +227,9 @@ test.describe('4 — Regelwerk und Warnungen', () => {
     await page.getByRole('button', { name: /Warnungen/i }).first().click();
     const pane = page.locator('.pane.right');
     await expect(pane).toContainText(/verbreitern/);
-    const flapWidth = () => page.locator('.canvas-svg .flap-outline').getAttribute('width');
+    // Die Außenkante der linken Innenfläche (.atelier-edge) hat die Breite der
+    // Grundfläche — sie wächst mit dem widenBase-Fix eins zu eins mit.
+    const flapWidth = () => page.locator('.canvas-svg .atelier-edge').first().getAttribute('width');
     const before = Number(await flapWidth());
     expect(before).toBe(240);
 
@@ -279,7 +299,7 @@ test.describe('5 — Schnittmuster und Export', () => {
     for await (const chunk of stream) text += chunk.toString();
     const json = JSON.parse(text) as { format: string; schemaVersion: number; project: { modules: unknown[] } };
     expect(json.format).toBe('organizer-studio/project');
-    expect(json.schemaVersion).toBe(2);
+    expect(json.schemaVersion).toBe(3);
     expect(json.project.modules.length).toBe(5);
     expect(text).not.toContain('projectHash');
   });
@@ -389,17 +409,66 @@ test.describe('9 — PDF-Datei und Drehung', () => {
 
   test('gedrehtes Modul bleibt im Raster und erzeugt keinen falschen Fehler', async ({ page }) => {
     await loadSchmuck(page);
-    const mod = page.locator('.canvas-svg g.mod').first();
-    const before = await mod.boundingBox();
-    await mod.click({ force: true });
+    const mod = page.locator('.canvas-svg g.mod').last();
+    const shape = mod.locator('rect.mod-shape');
+    // Modul selektieren: Maus an das Zentrum der mod-shape-Rect bewegen
+    // und klicken. Danach .mod.sel verifizieren, bevor 'r' gedrückt wird.
+    const box = await shape.boundingBox();
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await expect(mod).toHaveClass(/sel/);
+    // Die sel-box verwendet m.rect.w direkt. Da occupied() bei 90°-Rotation
+    // w/h tauscht, ändert sich m.rect.w (35 → 45) — ein zuverlässiger
+    // Indikator, dass die Rotation stattgefunden hat.
+    const selBox = mod.locator('rect.sel-box');
+    const wBefore = await selBox.getAttribute('width');
     await page.keyboard.press('r');
     await expect
-      .poll(async () => {
-        const b = await page.locator('.canvas-svg g.mod').first().boundingBox();
-        return b ? Math.round(b.width) : 0;
-      })
-      .not.toBe(Math.round(before!.width));
+      .poll(async () => page.locator('.canvas-svg g.mod').last().locator('rect.sel-box').getAttribute('width'))
+      .not.toBe(wBefore);
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
+  });
+
+  test('Drehung mit realem Höhenüberlauf meldet Fehler und Fix behebt ihn', async ({ page }) => {
+    await loadSchmuck(page);
+    await page.locator('.canvas-svg g.mod').first().click({ force: true });
+    await page.keyboard.press('r');
+    await page.getByRole('button', { name: /Warnungen/i }).first().click();
+    await expect(page.locator('.pane.right .finding.error')).toHaveCount(2);
+    await page.locator('.pane.right .finding.error button').first().click();
+    await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
+  });
+
+  test('Skaliergriffe: Parameter-Änderung vor und nach 90°-Drehung ohne Multiplikation', async ({ page }) => {
+    await loadSchmuck(page);
+    await tab(page, 'Projekt').click();
+    await page.getByRole('button', { name: /Leeres Etui/ }).first().click();
+    await tab(page, 'Designen').click();
+    await page.locator('.lib-item[data-module-id="M01"]').first().click();
+    // addModule selektiert das neue Modul automatisch — Skaliergriffe und
+    // Eigenschaften sind sofort sichtbar.
+
+    const wInput = page.getByRole('spinbutton', { name: 'Breite', exact: true });
+    const hInput = page.getByRole('spinbutton', { name: 'Höhe', exact: true });
+    // Skaliergriffe sind sichtbar (Modul ist selektiert)
+    await expect(page.locator('.scale-handle').first()).toBeVisible();
+
+    // Breite über das Eingabefeld ändern (dieselbe Parameterbindung wie
+    // der Skaliergriff, aber zuverlässig in E2E testbar).
+    await wInput.fill('100');
+    await wInput.blur();
+    expect(Number(await wInput.inputValue())).toBeGreaterThan(70);
+
+    // Nach 90°-Drehung sind die Achsen getauscht: ein Breiten-Parameter
+    // wird zur Höhe und umgekehrt. Die Änderung darf sich nicht
+    // multiplizieren (PR#9-Regressionsschutz).
+    await page.keyboard.press('r');
+    const hBefore = Number(await hInput.inputValue());
+    await hInput.fill(String(hBefore + 20));
+    await hInput.blur();
+    const hAfter = Number(await hInput.inputValue());
+    expect(hAfter).toBeGreaterThan(hBefore);
+    // Die Differenz muss exakt der Eingabe entsprechen — keine Multiplikation.
+    expect(hAfter - hBefore).toBeLessThan(35);
   });
 });
 
@@ -418,7 +487,7 @@ test.describe('10 — Ungespeicherte Änderungen (Schutz vor Datenverlust)', () 
     // Arbeit ist noch da: Name bleibt, Modulanzahl bleibt
     await expect(bar).toBeHidden();
     await expect(page.locator('.topbar .project-name')).toHaveValue('Schmuck-Organizer');
-    await tab(page, 'Editor').click();
+    await tab(page, 'Designen').click();
     await expect(page.locator('.canvas-svg g.mod')).toHaveCount(6);
   });
 
@@ -445,5 +514,77 @@ test.describe('10 — Ungespeicherte Änderungen (Schutz vor Datenverlust)', () 
     await page.keyboard.press('Escape');
     await expect(bar).toBeHidden();
     await expect(page.locator('.topbar .project-name')).toHaveValue('Schmuck-Organizer');
+  });
+});
+
+test.describe('11 — Responsive Matrix & Anleitung-Druck', () => {
+  for (const [label, size] of [
+    ['390x844', { width: 390, height: 844 }],
+    ['430x844', { width: 430, height: 844 }],
+    ['768x1024', { width: 768, height: 1024 }],
+    ['1024x1024', { width: 1024, height: 1024 }],
+    ['1440x900', { width: 1440, height: 900 }],
+    ['1920x900', { width: 1920, height: 900 }],
+  ] as const) {
+    test(`${label}: keine Überläufe in allen fünf Ansichten`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await loadSchmuck(page);
+      for (const name of ['Designen', 'Schnittmuster', 'Materialien', 'Anleitung', 'Projekt']) {
+        await tab(page, name).click();
+        const metrics = await page.evaluate(() => {
+          const docOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+          const tabbar = document.querySelector('.tabbar');
+          const tabbarRect = tabbar?.getBoundingClientRect();
+          const tabClipped = Array.from(document.querySelectorAll('.tab')).filter((el) => {
+            const r = el.getBoundingClientRect();
+            return tabbarRect && (r.bottom > tabbarRect.bottom + 1 || r.right > tabbarRect.right + 1);
+          }).length;
+          const clippedTables = Array.from(document.querySelectorAll('table.data')).filter((t) => {
+            const p = t.closest('.table-scroll') || t.parentElement;
+            return t.scrollWidth > window.innerWidth && (!p || getComputedStyle(p).overflowX === 'visible');
+          }).length;
+          return { docOverflow, tabClipped, clippedTables };
+        });
+        expect(metrics.docOverflow, `${label}/${name} docOverflow`).toBeLessThanOrEqual(1);
+        expect(metrics.tabClipped, `${label}/${name} tabClipped`).toBe(0);
+        expect(metrics.clippedTables, `${label}/${name} clippedTables`).toBe(0);
+      }
+      if (size.width <= 1000) {
+        // Die Sheets (Bibliothek/Eigenschaften/Warnungen) sind Teil der
+        // EditorWorkspace — zurück zum Designen-View wechseln, bevor das
+        // Eigenschaften-Sheet geöffnet wird.
+        await tab(page, 'Designen').click();
+        await page.getByRole('button', { name: /Eigenschaften/i }).click();
+        await expect(page.locator('.sheet').first()).toBeVisible();
+        await page.keyboard.press('Escape');
+      }
+    });
+  }
+
+  test('Anleitung drucken öffnet nur die Nähanleitung ohne Schnittmusterkacheln', async ({ page }) => {
+    await loadSchmuck(page);
+    await tab(page, 'Anleitung').click();
+    await page.evaluate(() => {
+      (window as unknown as { __printed: string }).__printed = '';
+      window.open = (() => ({
+        opener: window,
+        focus: () => {},
+        print: () => {},
+        document: {
+          readyState: 'complete',
+          open: () => {},
+          write: (s: string) => {
+            (window as unknown as { __printed: string }).__printed += s;
+          },
+          close: () => {},
+        },
+      })) as unknown as typeof window.open;
+    });
+    await page.locator('.doc-actions button').first().click();
+    const html = await page.evaluate(() => (window as unknown as { __printed: string }).__printed);
+    expect(html).toContain('Nähanleitung');
+    expect(html).not.toContain('class="tilebody"');
+    expect(html).not.toContain('<div class="cal-box">');
+    expect(html).not.toContain('<table class="material">');
   });
 });

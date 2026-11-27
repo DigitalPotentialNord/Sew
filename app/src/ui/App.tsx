@@ -1,6 +1,17 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+
+/** Reaktiv: ist die Ansicht aktuell ≤ 1000 px (Tablet/Smartphone)? */
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1000px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1000px)');
+    const on = (): void => setMobile(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return mobile;
+}
 import { buildPrintHtml, downloadText, fileName, tilePiece, toSvg, type PrintStrings } from '../core/export';
-import { buildPdf } from '../core/pdf';
 import { useStore } from '../state/store';
 import { formatAmount } from '../core/construction';
 import { t } from '../i18n/de';
@@ -13,6 +24,7 @@ import { MaterialsView } from './MaterialsView';
 import { PatternView } from './PatternView';
 import { InstructionsView } from './InstructionsView';
 import { ProjectView } from './ProjectView';
+import { StartScreen } from './StartScreen';
 import { Icon } from './icons';
 import { Button, Sheet } from './parts/primitives';
 
@@ -28,6 +40,7 @@ export function App(): JSX.Element {
 
   const errors = c.findings.filter((f) => f.severity === 'error').length;
   const warns = c.findings.filter((f) => f.severity === 'warn').length;
+  const startOpen = useStore((s) => s.session.startOpen);
 
   // Tastatur-Kürzel
   const undo = useStore((s) => s.undo);
@@ -57,6 +70,11 @@ export function App(): JSX.Element {
         remove(selection);
       } else if (e.key === 'Escape') {
         useStore.getState().select([]);
+      } else if (e.key.toLowerCase() === 'r' && selection.length === 1) {
+        // Drehen als zusätzlicher Kurzbefehl bei Einzelwahl — visuell auffindbar
+        // bleibt der Drehen-Knopf in der Kontextleiste/Eigenschaften.
+        e.preventDefault();
+        useStore.getState().rotate(selection[0]!);
       } else if (e.key === '1') setView('editor');
       else if (e.key === '2') setView('pattern');
       else if (e.key === '3') setView('materials');
@@ -72,6 +90,7 @@ export function App(): JSX.Element {
       <div className="app">
         <Topbar view={view} setView={setView} errors={errors} warns={warns} saved={saved} />
         <Tabbar view={view} setView={setView} errors={errors} warns={warns} modules={project.modules.length} pieces={c.metrics.cutPieceCount} />
+        {startOpen ? <StartScreen /> : null}
         <main className={`workspace${view === 'editor' ? '' : ' full'}`}>
           {view === 'editor' ? <EditorWorkspace /> : null}
           {view === 'pattern' ? <PatternHost /> : null}
@@ -105,6 +124,8 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
   const setLibOpen = useStore((s) => s.setLibOpen);
   const warnOpen = useStore((s) => s.session.warnOpen);
   const setWarnOpen = useStore((s) => s.setWarnOpen);
+  const propsOpen = useStore((s) => s.session.propsOpen);
+  const setPropsOpen = useStore((s) => s.setPropsOpen);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -127,8 +148,9 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-group mobile-only">
-        <Button icon="menu" onClick={() => setLibOpen(!libOpen)} title={t('mobile.lib')} active={libOpen} />
-        <Button icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'} onClick={() => setWarnOpen(!warnOpen)} active={warnOpen} title={t('warn.title')} />
+        <Button icon="menu" onClick={() => { setPropsOpen(false); setWarnOpen(false); setLibOpen(!libOpen); }} title={t('mobile.lib')} active={libOpen} />
+        <Button icon="sliders" onClick={() => { setLibOpen(false); setWarnOpen(false); setPropsOpen(!propsOpen); }} title={t('mobile.panel')} active={propsOpen} />
+        <Button icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'} onClick={() => { setLibOpen(false); setPropsOpen(false); setWarnOpen(!warnOpen); }} active={warnOpen} title={t('warn.title')} />
       </div>
       <div className="topbar-group desktop-only">
         <Button icon="save" onClick={save} title={t('top.save')} />
@@ -220,6 +242,7 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
         })),
         footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
       };
+      const { buildPdf } = await import('../core/pdf');
       const bytes = await buildPdf(c, strings);
       downloadText(fileName(project.name, 'schnittmuster', 'pdf'), 'application/pdf', bytes);
       const pages = c.pieces.filter((pc) => pc.kind === 'cut').reduce((n, pc) => n + tilePiece(pc).length, 0) + 4;
@@ -265,11 +288,11 @@ function Tabbar({
   pieces: number;
 }): JSX.Element {
   const items: { id: View; label: string; icon: 'sliders' | 'scissors' | 'spool' | 'list' | 'folder'; count?: string | number }[] = [
-    { id: 'editor', label: t('top.tab.editor'), icon: 'sliders' },
-    { id: 'pattern', label: t('top.tab.pattern'), icon: 'scissors', count: pieces },
-    { id: 'materials', label: t('top.tab.materials'), icon: 'spool' },
-    { id: 'instructions', label: t('top.tab.instructions'), icon: 'list' },
-    { id: 'project', label: t('top.tab.project'), icon: 'folder' },
+    { id: 'editor', label: t('nav.design'), icon: 'sliders' },
+    { id: 'pattern', label: t('nav.pattern'), icon: 'scissors', count: pieces },
+    { id: 'materials', label: t('nav.material'), icon: 'spool' },
+    { id: 'instructions', label: t('nav.instructions'), icon: 'list' },
+    { id: 'project', label: t('nav.project'), icon: 'folder' },
   ];
   return (
     <nav className="tabbar" role="tablist" aria-label="Ansicht">
@@ -304,7 +327,11 @@ function EditorWorkspace(): JSX.Element {
   const setLibOpen = useStore((s) => s.setLibOpen);
   const warnOpen = useStore((s) => s.session.warnOpen);
   const setWarnOpen = useStore((s) => s.setWarnOpen);
+  const propsOpen = useStore((s) => s.session.propsOpen);
+  const setPropsOpen = useStore((s) => s.setPropsOpen);
   const selection = useStore((s) => s.session.selection);
+  const select = useStore((s) => s.select);
+  const isMobile = useIsMobile();
 
   return (
     <>
@@ -333,6 +360,13 @@ function EditorWorkspace(): JSX.Element {
       {warnOpen ? (
         <Sheet title={t('warn.title')} onClose={() => setWarnOpen(false)}>
           <Warnings />
+        </Sheet>
+      ) : null}
+
+      {/* Tablet/Smartphone: Eigenschaften als Sheet (Button-gesteuert oder bei Auswahl). */}
+      {isMobile && (propsOpen || selection.length > 0) ? (
+        <Sheet title={t('mobile.panel')} onClose={() => { setPropsOpen(false); select([]); }}>
+          <Properties />
         </Sheet>
       ) : null}
     </>
@@ -482,9 +516,12 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
     .filter((f) => f.severity === 'warn' && !state.session.dismissed.includes(findingKey(f)))
     .map((f) => t(`rule.${f.ruleId}.detail`, f.values));
 
-  const html = buildPrintHtml(c, project.name, strings, materialLines, mode === 'instructions' ? instructions : instructions, openWarnings);
+  const html = buildPrintHtml(c, project.name, strings, materialLines, instructions, openWarnings, {
+    instructionsOnly: mode === 'instructions',
+  });
 
   const w = window.open('', '_blank', 'width=900,height=1200');
+  if (w) w.opener = null;
   if (!w) {
     // Fallback: Datei herunterladen
     downloadText(fileName(project.name, 'anleitung', 'html'), 'text/html', html);
