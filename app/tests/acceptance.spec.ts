@@ -450,19 +450,28 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     const wInput = page.getByRole('spinbutton', { name: 'Breite', exact: true });
     const hInput = page.getByRole('spinbutton', { name: 'Höhe', exact: true });
     const handle = page.locator('.scale-handle').first();
+    await expect(handle).toBeVisible();
     const b1 = await handle.boundingBox();
-    await page.mouse.move(b1!.x + b1!.width / 2, b1!.y + b1!.height / 2);
+    // Größenänderung durch Ziehen am rechten Griff: Maus auf das Handle
+    // bewegen, dann drag nach rechts.
+    const hx = b1!.x + b1!.width / 2;
+    const hy = b1!.y + b1!.height / 2;
+    await page.mouse.move(hx, hy);
     await page.mouse.down();
-    await page.mouse.move(b1!.x + b1!.width / 2 + 40, b1!.y + b1!.height / 2, { steps: 8 });
+    await page.mouse.move(hx + 60, hy, { steps: 12 });
     await page.mouse.up();
     expect(Number(await wInput.inputValue())).toBeGreaterThan(70);
 
     await page.keyboard.press('r');
     const hBefore = Number(await hInput.inputValue());
-    const b2 = await page.locator('.scale-handle').first().boundingBox();
-    await page.mouse.move(b2!.x + b2!.width / 2, b2!.y + b2!.height / 2);
+    const handle2 = page.locator('.scale-handle').first();
+    await expect(handle2).toBeVisible();
+    const b2 = await handle2.boundingBox();
+    const h2x = b2!.x + b2!.width / 2;
+    const h2y = b2!.y + b2!.height / 2;
+    await page.mouse.move(h2x, h2y);
     await page.mouse.down();
-    await page.mouse.move(b2!.x + b2!.width / 2 + 40, b2!.y + b2!.height / 2, { steps: 8 });
+    await page.mouse.move(h2x + 60, h2y, { steps: 12 });
     await page.mouse.up();
     const hAfter = Number(await hInput.inputValue());
     expect(hAfter).toBeGreaterThan(hBefore);
