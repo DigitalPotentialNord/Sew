@@ -98,18 +98,28 @@ export function Properties(): JSX.Element {
     .filter(([, fs]) => fs.length > 0);
   const advancedFields = def.fields.filter((f) => ADVANCED_KEYS.has(f.key));
 
+  const swapped = inst.rotation % 180 === 90;
+  const rotateHint = swapped ? t('props.rotHint90', { deg: String(inst.rotation) }) : inst.rotation === 180 ? t('props.rotHint180') : null;
+  // Bei 90°/270° belegt das Feld „Breite“ die vertikale Richtung und umgekehrt —
+  // Beschriftung getauscht (+ Gradzahl), Werte bleiben die Konstruktions-Parameter.
+  const fieldLabel = (f: (typeof def.fields)[number]): string => {
+    if (swapped && f.key === 'breite') return `${t('f.hoehe')} (${inst.rotation}°)`;
+    if (swapped && f.key === 'hoehe') return `${t('f.breite')} (${inst.rotation}°)`;
+    return t(f.labelKey);
+  };
+
   const renderField = (f: (typeof def.fields)[number]): JSX.Element => {
     const value = inst.params[f.key];
     if (f.derived) {
       const derivedValue = f.key === 'breite' ? channelWidth(inst.params) : f.key === 'hoehe' ? channelHeight(inst.params) : 0;
-      return <NumberField key={f.key} label={t(f.labelKey)} value={derivedValue} min={0} max={600} unit="mm" derived help={t('props.derivedHint')} />;
+      return <NumberField key={f.key} label={fieldLabel(f)} value={derivedValue} min={0} max={600} unit="mm" derived help={t('props.derivedHint')} />;
     }
     if (f.kind === 'bool') {
-      return <Switch key={f.key} label={t(f.labelKey)} checked={value === true} onChange={(v) => setParam(id, f.key, v)} />;
+      return <Switch key={f.key} label={fieldLabel(f)} checked={value === true} onChange={(v) => setParam(id, f.key, v)} />;
     }
     if (f.kind === 'enum') {
       return (
-        <Segmented key={f.key} label={t(f.labelKey)} value={String(value)} options={(f.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) }))} onChange={(v) => setParam(id, f.key, v)} />
+        <Segmented key={f.key} label={fieldLabel(f)} value={String(value)} options={(f.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) }))} onChange={(v) => setParam(id, f.key, v)} />
       );
     }
     const numeric = typeof value === 'number' ? value : 0;
@@ -117,7 +127,7 @@ export function Properties(): JSX.Element {
     return (
       <NumberField
         key={f.key}
-        label={t(f.labelKey)}
+        label={fieldLabel(f)}
         value={numeric}
         min={f.min ?? 0}
         max={f.max ?? 999}
@@ -146,6 +156,12 @@ export function Properties(): JSX.Element {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 'var(--s3)' }}>
             {modFindings.filter((f) => f.severity !== 'info').map((f, i) => <InlineFinding key={`${f.ruleId}${i}`} finding={f} />)}
           </div>
+        ) : null}
+
+        {rotateHint ? (
+          <p className="hint" role="status" style={{ margin: '0 0 var(--s2)', padding: '6px 8px', border: '1px solid var(--line-strong)', borderRadius: 6, background: 'var(--warn-soft)' }}>
+            {rotateHint}
+          </p>
         ) : null}
 
         {/* Primärwerte: Größe / Anzahl */}

@@ -42,6 +42,31 @@ describe('Issue #21: Modulkarten-Text sichtbar', () => {
   });
 });
 
+describe('Issue #12: Canvas-Labels und Falzüberstand', () => {
+  const CANV = readFileSync(join(__dirname, '..', 'ui', 'Canvas.tsx'), 'utf8');
+
+  it('kein ungekliptes Canvas-Top-Label mehr (.mod-label) — Modultexte nur im Clip', () => {
+    expect(CANV).not.toContain('mod-label');
+    expect(css).not.toContain('.mod-label');
+    // Der Summary-Text in Prims wird gekürzt und innerhalb der Box gezeichnet
+    expect(CANV).toContain('labelFits');
+  });
+
+  it('.mod-overflow markiert den V-G-01-Fall direkt im Canvas (rot, gestrichelt)', () => {
+    expect(css).toContain('.mod-overflow');
+    const body = ruleBody('.mod-overflow');
+    expect(body).toContain('stroke:');
+    expect(body).toContain('stroke-dasharray');
+    expect(CANV).toContain('overflows');
+    expect(CANV).toContain('mod-overflow');
+  });
+
+  it('Falz ist beschriftet (.atelier-fold-label) statt nur Linie', () => {
+    expect(css).toContain('.atelier-fold-label');
+    expect(CANV).toContain("t('canvas.fold')");
+  });
+});
+
 describe('Issue #19: Starter-Eingaben und Tastaturbedienung', () => {
   it('Größenfelder klemmen NICHT live in onChange (freies Tippen)', () => {
     expect(STARTSCREEN).not.toMatch(/onChange=\{[^}]*LIMITS\.base/);
