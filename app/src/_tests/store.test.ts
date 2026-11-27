@@ -126,6 +126,54 @@ describe('Store: Persistenz', () => {
     expect(useStore.getState().project).toBe(before);
   });
 
+  it('nach save() löst loadTemplate/newProject/resetToSaved keine Verwerfen-Rückfrage aus', () => {
+    useStore.getState().addModule('M01');
+    useStore.getState().save();
+    // Alle ohne force — dürfen NICHT pendingDiscard setzen
+    useStore.getState().loadTemplate('makeup');
+    expect(useStore.getState().pendingDiscard).toBeNull();
+    expect(useStore.getState().project.base.widthMm).toBe(280);
+
+    useStore.getState().addModule('M09');
+    useStore.getState().save();
+    useStore.getState().newProject();
+    expect(useStore.getState().pendingDiscard).toBeNull();
+
+    useStore.getState().addModule('M04');
+    useStore.getState().save();
+    useStore.getState().resetToSaved();
+    expect(useStore.getState().pendingDiscard).toBeNull();
+
+    // loadStored gegen die frisch gespeicherte Bibliothek — ohne force
+    const id = useStore.getState().project.id;
+    useStore.getState().addModule('M01');
+    useStore.getState().save();
+    useStore.getState().loadStored(id);
+    expect(useStore.getState().pendingDiscard).toBeNull();
+  });
+
+  it('nach save() löst importProject keine Verwerfen-Rückfrage aus', () => {
+    useStore.getState().addModule('M01');
+    useStore.getState().save();
+    const file = toFile(useStore.getState().project);
+    const res = useStore.getState().importProject(file);
+    expect(res.blocked).toBeUndefined();
+    expect(useStore.getState().pendingDiscard).toBeNull();
+  });
+
+  it('nach Bearbeitung ohne save() bleibt die Rückfrage erhalten', () => {
+    useStore.getState().addModule('M01');
+    useStore.getState().loadTemplate('makeup');
+    expect(useStore.getState().pendingDiscard).not.toBeNull();
+  });
+
+  it('save() setzt einen gültigen Namen, auch wenn das Feld geleert wurde', () => {
+    useStore.setState((s) => ({ project: { ...s.project, name: '   ' } }));
+    useStore.getState().save();
+    expect(useStore.getState().project.name.length).toBeGreaterThan(0);
+    expect(useStore.getState().project.name).toBe('Ohne Namen');
+  });
+
   it('resetToSaved ohne gespeichertes Projekt fällt auf die Vorlage zurück', () => {
     useStore.getState().resetToSaved();
     const s = useStore.getState();

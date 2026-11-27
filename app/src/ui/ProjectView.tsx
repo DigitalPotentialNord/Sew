@@ -6,7 +6,7 @@ import { useStore } from '../state/store';
 import { formatAmount } from '../core/construction';
 import { t } from '../i18n/de';
 import { downloadText, fileName, timestampForFile } from '../core/export';
-import { Button, NumberField, Panel, Segmented, Switch } from './parts/primitives';
+import { Button, NumberField, Panel, Switch } from './parts/primitives';
 import { Icon } from './icons';
 
 export function ProjectView(): JSX.Element {
@@ -114,7 +114,12 @@ export function ProjectView(): JSX.Element {
                 className="project-name"
                 style={{ border: '1px solid var(--line-strong)', flex: 1 }}
                 value={project.name}
-                onChange={(e) => setPar((p) => ({ ...p, name: e.target.value || 'Ohne Namen' }))}
+                onChange={(e) => setPar((p) => ({ ...p, name: e.target.value }))}
+                onBlur={() => {
+                  if (!project.name.trim()) {
+                    setPar((p) => ({ ...p, name: t('proj.untitled') }), { undoable: false });
+                  }
+                }}
                 aria-label={t('proj.name')}
               />
             </div>
@@ -175,15 +180,6 @@ export function ProjectView(): JSX.Element {
               slider
               onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, fabricWidthMm: v } }))}
             />
-            <Segmented
-              label={t('proj.unit')}
-              value={project.settings.unit}
-              options={[
-                { value: 'mm', label: 'mm' },
-                { value: 'cm', label: 'cm' },
-              ]}
-              onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, unit: v } }))}
-            />
           </Panel>
 
           <div>
@@ -199,7 +195,7 @@ export function ProjectView(): JSX.Element {
                 </div>
                 <div className="stat">
                   <div className="stat-label">{t('proj.statsArea')}</div>
-                  <div className="stat-value">{(c.metrics.fabricAreaM2 * 100).toFixed(1)}</div>
+                  <div className="stat-value">{(c.metrics.fabricAreaM2 * 100).toFixed(1).replace('.', ',')}</div>
                   <div className="stat-sub">dm²</div>
                 </div>
                 <div className="stat">
@@ -227,7 +223,7 @@ export function ProjectView(): JSX.Element {
                 <dd className="mono">{c.practiceVersion}</dd>
                 <dt>Schema</dt>
                 <dd className="mono">v{project.schemaVersion}</dd>
-                <dt>{t('proj.statsPieces')}</dt>
+                <dt>{t('proj.statsPiecesTotal')}</dt>
                 <dd>{c.metrics.pieceCount}</dd>
                 <dt>Fehler / Hinweise</dt>
                 <dd>
@@ -286,7 +282,7 @@ export function ProjectView(): JSX.Element {
                             </Button>
                           </>
                         ) : (
-                          <Button size="sm" variant="danger" icon="trash" onClick={() => setConfirmId(s.id)} />
+                          <Button size="sm" variant="danger" icon="trash" onClick={() => setConfirmId(s.id)} ariaLabel={t('proj.confirmDelete')} title={t('proj.confirmDelete')} />
                         )}
                       </td>
                     </tr>

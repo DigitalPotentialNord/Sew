@@ -238,9 +238,18 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
     return { row, insts, dims, height };
   });
 
-  // Zeilen sind in der Reihenfolge des Projekts angeordnet; ein gedrehtes Modul ist
-  // breiter als seine Zeile hoch ist. Damit dieser Überhang ehrlich gemeldet wird,
-  // steht die Überlappung im Befund — nicht als stille Abschneidung.
+// Zeilen sind in der Reihenfolge des Projekts angeordnet; ein gedrehtes Modul ist
+// breiter als seine Zeile hoch ist. Damit dieser Überhang ehrlich gemeldet wird,
+// steht die Überlappung im Befund — nicht als stille Abschneidung.
+//
+// Platzierungs-Mapping (alle Modultypen einheitlich): Module mit
+// `placement: { kind: 'edge' }` (M07, M08, M13) werden wie Zeilenmodule in der
+// Reihe platziert; ihre Lage »an der Kante« ist derzeit nur eine Näherung
+// (siehe AGENTS.md §7 und docs/architecture/positioning-model-decision.md §6).
+// Es gibt absichtlich keine Sonderplatzierung — so verbraucht jedes Modul
+// nachvollziehbar Zeilenbudget und wird von denselben Regeln (V-G-01/13/14,
+// Modulregeln) geprüft. Ihre Maße sind über die unbestimmte Zeilenhöhe bzw.
+// über V-G-13 abgedeckt; ein Export mit überstehendem Teil ist gesperrt.
   const rowTop = new Map<string, number>();
   let acc = PRACTICE.edgeMarginMm;
   for (const r of raw) {
@@ -423,12 +432,16 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
 
   for (const r of placedRows) {
     if (r.fillPct > LIMITS.channelFillWarnPct && r.usedMm > 0) {
+      // Ziel-Auslastung ≤ 95 %: usedMm / availW' ≤ 0,95 → availW' ≥ usedMm / 0,95.
+      // `usedMm ≤ availW` (sonst feuert V-G-01), also ist das Ergebnis größer als
+      // die aktuelle Panelbreite — ein Fix, der verkleinert oder auf 0 setzt, ist ausgeschlossen.
+      const targetAvail = Math.ceil(r.usedMm / (LIMITS.channelFillTargetPct / 100));
       findings.push({
         ruleId: 'V-G-08',
         severity: 'warn',
         subject: { kind: 'panel' },
         values: { zeile: r.name, pct: r.fillPct },
-        fix: { kind: 'widenBase', toMm: Math.round(flapW + (r.usedMm - availW)) },
+        fix: { kind: 'widenBase', toMm: targetAvail + 2 * PRACTICE.edgeMarginMm },
         dismissible: true,
       });
     }
@@ -634,11 +647,19 @@ export function packFabric(
   let shelfY = 0;
   let shelfH = 0;
   let x = 0;
-  let rows = 0;
+  let rows = 0; // vollständig geschlossene Reihen
 
   for (const e of expanded) {
     if (e.w > fabricWidthMm) {
-      // passt nicht in die Stoffbreite → wird als Warnung gemeldet, hier trotzdem platziert
+      // Passt nicht in die Stoffbreite → wird als Warnung gemeldet (V-G-12), hier trotzdem
+      // platziert. ZUERST die offene Reihe abschließen, sonst überlappt das Teil die
+      // bereits liegenden Teile in derselben Reihe.
+      if (x > 0 && shelfH > 0) {
+        shelfY += shelfH;
+        shelfH = 0;
+        x = 0;
+        rows += 1;
+      }
       items.push({ pieceId: e.id, rect: rect(0, shelfY, e.w, e.h), count: 1 });
       shelfY += e.h;
       rows += 1;
@@ -657,7 +678,9 @@ export function packFabric(
 
   const usedHeight = mm(shelfY + shelfH);
   const meters = Math.ceil(((usedHeight * (1 + wastePct / 100)) / 1000) * 100) / 100;
-  return { pieces: items, rows: rows + 1, usedHeightMm: usedHeight, meters, wastePct };
+  // Offene letzte Reihe zählen — geschlossene zählen bereits in `rows`.
+  const totalRows = rows + (shelfH > 0 || x > 0 ? 1 : 0);
+  return { pieces: items, rows: totalRows, usedHeightMm: usedHeight, meters, wastePct };
 }
 
 
@@ -700,7 +723,10 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
   for (const kind of ['fabric', 'lining', 'interfacing', 'batting'] as const) {
     const relevant = pieces.filter((pc) => pc.material === kind && pc.kind === 'cut');
     if (relevant.length === 0) continue;
-    const plan = packFabric(pieces, fabricWidth, kind);
+    // Einlage (H250) und Vlies werden typischerweise 90 cm breit verkauft —
+    // nicht mit der Meterwaren-Breite des Außenstoffs packen.
+    const planWidth = kind === 'fabric' || kind === 'lining' ? fabricWidth : PRACTICE.interfacingWidthMm;
+    const plan = packFabric(pieces, planWidth, kind);
     const areaMm2 = relevant.reduce((acc, pc) => acc + pc.w * pc.h * pc.count, 0);
     lines.push({
       kind,
@@ -710,11 +736,11 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       unit: 'm2',
       meters: plan.meters,
       certainty: 'estimated',
-      basisKey: 'basis.flaeche',
+      basisKey: relevant.reduce((a, pc) => a + pc.count, 0) === 1 ? 'basis.flaecheOne' : 'basis.flaeche',
       basisValues: {
         teile: relevant.reduce((a, pc) => a + pc.count, 0),
-        flaeche: Math.round(areaMm2 / 100) / 10,
-        breite: fabricWidth,
+        flaeche: (areaMm2 / 10000).toFixed(1).replace('.', ','), // mm² → dm²
+        breite: planWidth,
         verschnitt: plan.wastePct,
       },
       sources: relevant.map((pc) => pc.id),
@@ -828,7 +854,7 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       unit: 'mm',
       certainty: 'estimated',
       basisKey: 'basis.garn',
-      basisValues: { naht: Math.round(seamLength), faktor: PRACTICE.threadDensityFactor },
+      basisValues: { naht: Math.round(seamLength), faktor: String(PRACTICE.threadDensityFactor).replace('.', ',') },
       sources: [],
     });
   }
@@ -876,7 +902,8 @@ const PHASE_OF: Record<string, SewingOperation['phase']> = {
   'final-check': 'finish',
 };
 
-const PHASE_ORDER: SewingOperation['phase'][] = ['prepare', 'cut', 'sew-order', 'assemble', 'finish'];
+/** Phasenreihenfolge — EINMAL definiert; UI und PDF lesen dieselbe Liste. */
+export const PHASE_ORDER: SewingOperation['phase'][] = ['cut', 'prepare', 'sew-order', 'assemble', 'finish'];
 
 function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOperation[] {
   interface Node {
@@ -918,6 +945,7 @@ function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOp
         values: { ...op.values, modul: def.nameKey, nr: i + 1 },
         deps: [cutId],
         seq: seq++,
+        ...(op.phase ? { phase: op.phase } : {}),
       });
       moduleOps.push({ id, kind: op.kind });
     });
@@ -942,7 +970,7 @@ function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOp
     const n = nodes.find((x) => x.id === o.id);
     n?.deps.add(turnId);
   }
-  push({ id: 'op-final', kind: 'final-check', titleKey: 'op.final-check', values: { teile: pieces.filter((x) => x.kind === 'cut').length }, deps: ['op-topstitch'], seq: seq++ });
+  push({ id: 'op-final', kind: 'final-check', titleKey: 'op.final-check', values: {}, deps: ['op-topstitch'], seq: seq++ });
 
   // Kahn mit totalem Schlüssel
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -1029,23 +1057,28 @@ export function construct(p: Project): Construction {
   const totalAvail = rows.length * (p.base.widthMm - 2 * PRACTICE.edgeMarginMm);
 
   // I7/I8: der Hash hängt nur an der ABSICHT (Base, Zeilen, Modulparameter, Praxisversion),
-  // nicht an IDs, Zeitstempeln oder der Speicherreihenfolge — die Reihenfolge selbst steckt
-  // numerisch in `order` und ändert den Hash weiterhin, sobald sie wirklich tauscht (I6).
+  // nicht an IDs, Zeitstempeln oder der Speicherreihenfolge. Die Reihenfolge der Module
+  // innerhalb einer Zeile ist dagegen Teil der Konstruktion (sie bestimmt die Anordnung
+  // auf dem Stoff) — sie fließt deterministisch als Index in den Hash ein: sortiert wird
+  // nach (Zeilenindex, Position im Modul-Array). Ein Umhängen über Zeilengrenzen hinweg
+  // ändert den Hash nicht (gleiche Zeile, gleiche Reihenfolge → gleiche Konstruktion).
+  const rowIndex = new Map(p.rows.map((r, i) => [r.id, i]));
   const hashInput = JSON.stringify({
     practice: PRACTICE.version,
     base: p.base,
     rows: p.rows.map((r) => r.name),
     modules: p.modules
-      .map((m) => ({
+      .map((m, i) => ({ m, i, row: rowIndex.get(m.rowId) ?? p.rows.length }))
+      .sort((a, b) => a.row - b.row || a.i - b.i)
+      .map(({ m, row }) => ({
         typeId: m.typeId,
-        row: p.rows.findIndex((r) => r.id === m.rowId),
+        row,
         params: Object.keys(m.params)
           .sort()
           .map((k) => [k, m.params[k]]),
         rotation: m.rotation,
         side: m.side,
-      }))
-      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      })),
     settings: p.settings,
   });
 

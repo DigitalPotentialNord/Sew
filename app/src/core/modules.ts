@@ -9,6 +9,7 @@ import { mm, clamp, type Mm } from './geometry';
 import { PRACTICE } from './practice';
 import type {
   Finding,
+  LayoutContext,
   ModuleDef,
   ModuleTypeId,
   ParamValue,
@@ -28,6 +29,28 @@ const str = (p: Params, k: string, fallback = ''): string => {
 const bool = (p: Params, k: string, fallback = false): boolean => {
   const v = p[k];
   return typeof v === 'boolean' ? v : fallback;
+};
+
+/**
+ * Höhen-Fix für Regeln »Modul zu hoch«: `setParam`, wenn das Feld den
+ * verfügbaren Platz erreicht, ohne sein Minimum zu unterschreiten — sonst
+ * wird `growHeight` vorgeschlagen. Ein Fix, der auf 0 klemmt, behebt das
+ * Finding nicht und wird nicht angeboten.
+ */
+const heightFix = (
+  ctx: LayoutContext,
+  moduleId: string,
+  key: string,
+  current: number,
+  fieldMin: number,
+  ratio = 1,
+): Finding['fix'] => {
+  const settable = Math.floor(ctx.rowHeightMm * ratio);
+  if (settable >= fieldMin) return { kind: 'setParam', moduleId, key, value: settable };
+  return {
+    kind: 'growHeight',
+    toMm: Math.ceil(ctx.panelHeightMm - ctx.rowHeightMm + current / ratio) + 20,
+  };
 };
 
 const base = (nz: number, key: string, nameKey: string, w: number, h: number, material: PieceSpec['material'], extra: Partial<PieceSpec> = {}): PieceSpec => ({
@@ -125,7 +148,7 @@ const M01: ModuleDef = {
       { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-top', values: { saum: sb } },
       { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-pocket', values: { hoehe: h } },
       { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { hoehe: h } },
-      { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-sides', values: { hoehe: h } },
+      { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-sides', values: {} },
     ];
   },
   validate: (p, ctx, id) => {
@@ -158,7 +181,7 @@ const M01: ModuleDef = {
         severity: 'error',
         subject: { kind: 'module', id },
         values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
-        fix: { kind: 'setParam', moduleId: id, key: 'hoehe', value: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
         dismissible: false,
       });
     }
@@ -235,8 +258,9 @@ const M02: ModuleDef = {
     const sections = Math.max(1, num(p, 'sections', 3));
     return [
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-teilung', values: { sections } },
-      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-bottom', values: { hoehe: num(p, 'hoehe', 80) } },
-      { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { sections } },
+      // Der 10-mm-Umschlag unten (fach-geteilt: h + 10 + 2·nz) — nicht die Fachhöhe.
+      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-bottom', values: { umschlag: 10 } },
+      { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { hoehe: Math.round(num(p, 'hoehe', 80)) } },
     ];
   },
   validate: (p, ctx, id) => {
@@ -262,6 +286,17 @@ const M02: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 80);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M02-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
         dismissible: false,
       });
     }
@@ -342,9 +377,9 @@ const M03: ModuleDef = {
   operations: (p, _ctx, id) => {
     const w = num(p, 'breite', 160);
     return [
-      { kind: 'install-zip', moduleId: id, dependsOn: [], titleKey: 'op.install-zip', values: { laenge: Math.round(w) } },
+      { kind: 'install-zip', moduleId: id, dependsOn: [], titleKey: 'op.install-zip', values: { laenge: Math.round(w + 20) } },
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-zip-bag', values: { breite: Math.round(w) } },
-      { kind: 'topstitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-zip', values: { laenge: Math.round(w) } },
+      { kind: 'topstitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-zip', values: { laenge: Math.round(w) }, phase: 'sew-order' },
     ];
   },
   validate: (p, ctx, id) => {
@@ -377,8 +412,18 @@ const M03: ModuleDef = {
         severity: 'warn',
         subject: { kind: 'module', id },
         values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
-        fix: { kind: 'setParam', moduleId: id, key: 'hoehe', value: Math.round(ctx.rowHeightMm * 0.8) },
+        fix: heightFix(ctx, id, 'hoehe', h, 50, 0.9),
         dismissible: true,
+      });
+    }
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M03-04',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 50),
+        dismissible: false,
       });
     }
     return out;
@@ -453,7 +498,7 @@ const M04: ModuleDef = {
     const loops = Math.max(1, num(p, 'loops', 6));
     return [
       { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-loops', values: { loops } },
-      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-elastik-trage', values: { loops } },
+      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-elastik-trage', values: { enden: 2 } },
       { kind: 'thread-elastic', moduleId: id, dependsOn: [], titleKey: 'op.thread-elastic', values: { loops, laenge: Math.round(loops * loopLength(p)) } },
     ];
   },
@@ -668,7 +713,16 @@ const M06: ModuleDef = {
       { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-channel', values: { hoehe: Math.round(h) } },
       { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-top', values: { saum: 10 } },
       { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-channel', values: { hoehe: Math.round(h) } },
-      { kind: 'stitch-divider', moduleId: id, dependsOn: [], titleKey: 'op.stitch-dividers', values: { naehte: anzahl - 1, hoehe: Math.round(h) } },
+      // Trennnähte nur, wenn es tatsächlich mehrere Paare gibt — bei paare = 1 gibt es keine.
+      ...(anzahl > 1
+        ? [{
+            kind: 'stitch-divider' as const,
+            moduleId: id,
+            dependsOn: [],
+            titleKey: anzahl - 1 === 1 ? 'op.stitch-divider-one' : 'op.stitch-dividers',
+            values: { naehte: anzahl - 1, hoehe: Math.round(h) },
+          }]
+        : []),
     ];
   },
   validate: (p, ctx, id) => {
@@ -880,7 +934,7 @@ const M08: ModuleDef = {
   ],
   operations: (p, _ctx, id) => [
     { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.make-button-tab', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
-    { kind: 'insert-strap', moduleId: id, dependsOn: [], titleKey: 'op.attach-strap', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
+    { kind: 'insert-strap', moduleId: id, dependsOn: [], titleKey: 'op.attach-button-tab', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
     { kind: 'attach-button', moduleId: id, dependsOn: [], titleKey: 'op.attach-button', values: { durchmesser: Math.round(num(p, 'knopfDurchmesser', 18)) } },
   ],
   validate: (p, _ctx, id) => {
@@ -970,6 +1024,17 @@ const M09: ModuleDef = {
         dismissible: true,
       });
     }
+    const h = num(p, 'hoehe', 55);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M09-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -1047,6 +1112,17 @@ const M10: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 45);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M10-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
         dismissible: false,
       });
     }
@@ -1141,6 +1217,17 @@ const M11: ModuleDef = {
         dismissible: false,
       });
     }
+    const h = num(p, 'hoehe', 120);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M11-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 60),
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -1198,8 +1285,10 @@ const M12: ModuleDef = {
   },
   operations: (p, _ctx, id) => {
     const sections = Math.max(1, num(p, 'sections', 2));
+    const w = num(p, 'breite', 90);
     return [
-      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-beleg', values: { sections } },
+      // EIN Belegstreifen (w × 20 mm, quer zugeschnitten) — kein Fächer-Bezug.
+      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-beleg', values: { breite: Math.round(w) } },
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-teilung', values: { sections } },
       { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-deep-pocket', values: { hoehe: Math.round(num(p, 'hoehe', 120)) } },
     ];
@@ -1225,6 +1314,17 @@ const M12: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 120);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M12-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 40),
         dismissible: false,
       });
     }
@@ -1380,6 +1480,17 @@ const M14: ModuleDef = {
         dismissible: false,
       });
     }
+    const h = num(p, 'hoehe', 90);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M14-02',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 30),
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -1419,19 +1530,31 @@ const M15: ModuleDef = {
     return [base(nz, 'massband-fach', 'piece.massband-fach', num(p, 'breite', 60) + 2 * nz, num(p, 'hoehe', 40) + 2 * nz, 'fabric', { noteKey: 'note.massband' })];
   },
   operations: (_p, _ctx, id) => [{ kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { hoehe: 40 } }],
-  validate: (p, ctx, id) =>
-    num(p, 'breite', 60) > ctx.channelFreeMm
-      ? [
-          {
-            ruleId: 'V-M15-01',
-            severity: 'error',
-            subject: { kind: 'module', id },
-            values: { breite: Math.round(num(p, 'breite', 60)), frei: Math.round(ctx.channelFreeMm) },
-            fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (num(p, 'breite', 60) - ctx.channelFreeMm) },
-            dismissible: false,
-          },
-        ]
-      : [],
+  validate: (p, ctx, id) => {
+    const out: Finding[] = [];
+    if (num(p, 'breite', 60) > ctx.channelFreeMm) {
+      out.push({
+        ruleId: 'V-M15-01',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { breite: Math.round(num(p, 'breite', 60)), frei: Math.round(ctx.channelFreeMm) },
+        fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (num(p, 'breite', 60) - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 40);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M15-02',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
+        dismissible: false,
+      });
+    }
+    return out;
+  },
   draw: (_p, w, h) => [
     { t: 'rect', x: 0, y: 0, w, h, style: 'pocket' },
     { t: 'circle', cx: w / 2, cy: h / 2, r: Math.min(w, h) * 0.32, style: 'ring' },
@@ -1467,7 +1590,7 @@ const M16: ModuleDef = {
     ];
   },
   operations: (p, _ctx, id) => [
-    { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-scissors', values: { laenge: Math.round(num(p, 'laenge', 180)) } },
+    { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-scissors', values: { hoehe: Math.round(num(p, 'laenge', 180) * 0.5) } },
     { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-deep-pocket', values: { hoehe: Math.round(num(p, 'laenge', 180)) } },
   ],
   validate: (p, ctx, id) => {
@@ -1476,11 +1599,11 @@ const M16: ModuleDef = {
     if (h > ctx.rowHeightMm) {
       out.push({
         ruleId: 'V-M16-01',
-        severity: 'warn',
+        severity: 'error',
         subject: { kind: 'module', id },
         values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
-        fix: { kind: 'setParam', moduleId: id, key: 'laenge', value: Math.round(ctx.rowHeightMm) },
-        dismissible: true,
+        fix: heightFix(ctx, id, 'laenge', h, 80),
+        dismissible: false,
       });
     }
     if (num(p, 'breite', 60) > ctx.channelFreeMm) {

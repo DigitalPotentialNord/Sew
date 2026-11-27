@@ -93,7 +93,7 @@ export function MaterialsView(): JSX.Element {
                   })}
                 </p>
                 <div className="kv" style={{ marginTop: 8 }}>
-                  <dt>{t('mat.tab.rows', { rows: plan.rows, height: Math.round(plan.usedHeightMm) })}</dt>
+                  <dt>{t(plan.rows === 1 ? 'mat.tab.row' : 'mat.tab.rows', { rows: plan.rows, height: Math.round(plan.usedHeightMm) })}</dt>
                   <dd />
                   <dt>Stoffhöhe</dt>
                   <dd>{Math.round(plan.usedHeightMm)} mm</dd>
@@ -179,7 +179,7 @@ function FabricPlanSvg({
             stroke="var(--ink)"
             strokeWidth={1}
           />
-          {p.rect.w > 60 ? (
+          {p.rect.w >= p.pieceId.length * 4.6 + 10 && p.rect.h >= 14 ? (
             <text x={p.rect.x + 4} y={p.rect.y + 11} style={{ fontSize: 8, fill: 'var(--ink-2)' }}>
               {p.pieceId}
             </text>

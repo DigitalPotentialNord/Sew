@@ -18,6 +18,8 @@ import { PRACTICE } from '../core/practice';
 import type { Side } from '../core/construction';
 import type { ModuleTypeId, Prim } from '../core/types';
 import { useStore } from '../state/store';
+import { chooseContextBarPlacement, type PixelRect } from './contextBar';
+import { isInteractiveTarget } from './isInteractiveTarget';
 import { t } from '../i18n/de';
 import { Icon } from './icons';
 import { Button } from './parts/primitives';
@@ -136,10 +138,11 @@ export function Canvas(): JSX.Element {
 
   useEffect(() => {
     const down = (e: KeyboardEvent): void => {
-      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement)) {
-        e.preventDefault();
-        setSpaceDown(true);
-      }
+      if (e.code !== 'Space' || isInteractiveTarget(e.target)) return;
+      // Während des Starter-Dialogs darf die Canvas (hinter dem Overlay) nicht mitschwenken.
+      if (useStore.getState().session.startOpen) return;
+      e.preventDefault();
+      setSpaceDown(true);
     };
     const up = (e: KeyboardEvent): void => {
       if (e.code === 'Space') setSpaceDown(false);
@@ -415,7 +418,19 @@ export function Canvas(): JSX.Element {
   }, [c.modules, selSet]);
 
   // Kontext-Aktionen für die Auswahl: schwebende Leiste nahe der Auswahl.
-  const ctxAnchor = selectedBBox;
+  // Pixel-Ursprung der Stage (margin + Pan) — dieselbe Rechnung wie im Markup,
+  // damit die Leiste exakt über/unter der Auswahl landet.
+  const wrapW = wrapRef.current?.clientWidth ?? 800;
+  const stageX = session.panX + Math.max(0, (wrapW - worldW * scale) / 2);
+  const stageY = session.panY + 28 * scale;
+  const toPx = (r: Rect): PixelRect => ({
+    x: stageX + (r.x + PAD) * scale,
+    y: stageY + (r.y + PAD) * scale,
+    w: r.w * scale,
+    h: r.h * scale,
+  });
+  const ctxAnchor = selectedBBox ? toPx(selectedBBox) : null;
+  const othersPx = c.modules.filter((m) => !selSet.has(m.instanceId)).map((m) => toPx(m.rect));
 
   return (
     <>
@@ -529,6 +544,7 @@ export function Canvas(): JSX.Element {
               {/* Falz/Bund: schmaler Streifen zwischen den Flaps */}
               {spine > 0 ? <rect x={width} y={0} width={spine} height={c.book.h} className="atelier-fold" /> : null}
               {spine > 0 ? <line x1={width + spine / 2} y1={0} x2={width + spine / 2} y2={c.book.h} className="atelier-fold-line" /> : null}
+              {spine > 0 ? <text x={width + spine / 2} y={-2.5} textAnchor="middle" className="atelier-fold-label">{t('canvas.fold')}</text> : null}
 
               {/* Dezente Außenkanten — nur eine ruhige Kontur, keine Maßkette */}
               <rect x={0} y={0} width={width} height={c.book.h} rx={radius} className="atelier-edge" />
@@ -584,6 +600,12 @@ export function Canvas(): JSX.Element {
               const resizable = RESIZE[m.typeId];
               const canW = resizable.w !== null;
               const canH = resizable.h !== null;
+              // Über die nutzbare Kante der eigenen Innenfläche ragt das Modul → V-G-01-Lage:
+              // sofort rot markieren, statt den Überblick erst dem Fehlerblatt zu überlassen.
+              const sideLeft = m.rect.x < rightOrigin;
+              const usableLo = (sideLeft ? 0 : rightOrigin) + PRACTICE.edgeMarginMm;
+              const usableHi = (sideLeft ? width : rightOrigin + width) - PRACTICE.edgeMarginMm;
+              const overflows = m.rect.x < usableLo - 0.5 || m.rect.x + m.rect.w > usableHi + 0.5;
               const rot = m.rotation % 360;
               const swapped = rot % 180 === 90;
               const drawW = swapped ? m.rect.h : m.rect.w;
@@ -620,14 +642,12 @@ export function Canvas(): JSX.Element {
                 >
                   <g transform={innerTransform}>
                     <rect x={boxX} y={boxY} width={drawW} height={drawH} rx={3} className="mod-shape" opacity={preview ? 0.4 : 1} />
+                    {overflows ? <rect x={boxX} y={boxY} width={drawW} height={drawH} rx={3} className="mod-overflow" /> : null}
                     <g clipPath={`url(#clip-${m.instanceId})`} opacity={preview ? 0.4 : 1}>
                       <Prims prims={m.prims} rect={drawRect} summary={m.summary} />
                     </g>
                     <clipPath id={`clip-${m.instanceId}`}><rect x={boxX} y={boxY} width={drawW} height={drawH} rx={3} /></clipPath>
                   </g>
-                  {m.summary.length * 2.1 + 4 <= m.rect.w ? (
-                    <text x={m.rect.x + 2} y={m.rect.y + 4} className="mod-label">{m.summary}</text>
-                  ) : null}
                   {m.locked ? (
                     <g transform={`translate(${m.rect.x + m.rect.w - 9},${m.rect.y + 3})`} opacity={0.55}>
                       <path d="M0,3.5 v-1.2 a1.6,1.6 0 013.2,0 v1.2" stroke="var(--ink)" strokeWidth={0.7} fill="none" />
@@ -696,10 +716,8 @@ export function Canvas(): JSX.Element {
         {ctxAnchor && selected.length === 1 ? (
           <ContextBar
             anchor={ctxAnchor}
-            scale={scale}
-            panX={session.panX}
-            panY={session.panY}
-            wrapWidth={wrapRef.current?.clientWidth ?? 800}
+            wrapWidth={wrapW}
+            others={othersPx}
             side={project.modules.find((m) => m.id === selected[0])?.side ?? 'left'}
             onMoveSide={(s) => moveToSide(selected[0]!, s)}
             onDuplicate={() => duplicate(selected[0]!)}
@@ -715,32 +733,26 @@ export function Canvas(): JSX.Element {
 /** Schwebende Aktionsleiste über der Auswahl: duplizieren, Seite, drehen, löschen. */
 function ContextBar({
   anchor,
-  scale,
-  panX,
-  panY,
   wrapWidth,
+  others,
   side,
   onMoveSide,
   onDuplicate,
   onDelete,
   onRotate,
 }: {
-  anchor: Rect;
-  scale: number;
-  panX: number;
-  panY: number;
+  anchor: PixelRect; // bereits in Wrap-Pixeln
   wrapWidth: number;
+  others: readonly PixelRect[]; // Nachbarmodule in Wrap-Pixeln
   side: Side;
   onMoveSide: (s: Side) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onRotate: () => void;
 }): JSX.Element {
-  const left = anchor.x * scale + (anchor.w * scale) / 2 + panX;
-  const top = anchor.y * scale + panY - 8;
-  const clampedLeft = Math.max(8, Math.min(wrapWidth - 280, left - 140));
+  const { left, top } = chooseContextBarPlacement(anchor, others, wrapWidth);
   return (
-    <div className="ctx-bar" style={{ left: clampedLeft, top: top < 8 ? anchor.y * scale + anchor.h * scale + panY + 8 : top }} aria-label={t('canvas.select')} onPointerDown={(e) => e.stopPropagation()}>
+    <div className="ctx-bar" style={{ left, top }} aria-label={t('canvas.select')} onPointerDown={(e) => e.stopPropagation()}>
       <span className="ctx-label">{side === 'left' ? t('side.left') : t('side.right')}</span>
       <span className="ctx-divider" />
       <Button size="sm" icon="rotate" onClick={onRotate} title={t('canvas.rotate')} ariaLabel={t('canvas.rotate')} />
@@ -754,11 +766,11 @@ function ContextBar({
 
 function Prims({ prims, rect, summary }: { prims: readonly Prim[]; rect: Rect; summary: string }): JSX.Element {
   const hasUnitText = prims.some((p) => p.t === 'text' && /\d+\s*(mm|×)/.test(p.text));
-  const labelFits = summary.length * 2.1 + 4 <= rect.w;
+  const labelFits = summary.length * 1.8 + 4 <= rect.w;
   return (
     <>
       {!hasUnitText && labelFits ? (
-        <text x={rect.x + 2} y={rect.y + rect.h - 2.5} style={{ fontSize: 4, fill: 'var(--ink-3)', fontWeight: 500 }}>{summary}</text>
+        <text x={rect.x + 2} y={rect.y + rect.h - 1.8} style={{ fontSize: 3.2, fill: 'var(--ink-3)', fontWeight: 500 }}>{summary}</text>
       ) : null}
       {prims.map((p, i) => {
         switch (p.t) {

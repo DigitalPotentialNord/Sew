@@ -62,26 +62,26 @@ describe('buildPdf', () => {
     cutList: c.pieces.map((p) => ({ label: p.id, size: `${p.w} x ${p.h} mm`, count: `${p.count}x`, tiles: '1' })),
     instructions: c.operations.map((o) => ({ index: o.index, phase: o.phase, text: 'Test' })),
     footer: 'Fusszeile',
+    piece: 'Teile',
   };
 
   it('erzeugt ein gültiges PDF mit Deckblatt, Listen und Kacheln', async () => {
-    const bytes = await buildPdf(c, strings);
+    const { bytes, pages } = await buildPdf(c, strings);
     expect(bytes.length).toBeGreaterThan(2000);
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+    expect(pages).toBeGreaterThan(0);
   });
 
   it('enthält so viele Seiten wie Kacheln plus vier Listen-Seiten', async () => {
-    const bytes = await buildPdf(c, strings);
-    const { PDFDocument } = await import('pdf-lib');
-    const doc = await PDFDocument.load(bytes);
+    const { pages } = await buildPdf(c, strings);
     const { tilePiece } = await import('../core/export');
     const tiles = c.pieces.filter((p) => p.kind === 'cut').reduce((n, p) => n + tilePiece(p).length, 0);
-    expect(doc.getPageCount()).toBe(tiles + 4);
+    expect(pages).toBe(tiles + 4);
   });
 
   it('gibt für ein leeres Projekt kein kaputtes PDF zurück', async () => {
     const empty = construct({ ...buildTemplate('schmuck'), modules: [] });
-    const bytes = await buildPdf(empty, { ...strings, materials: [], cutList: [] });
+    const { bytes } = await buildPdf(empty, { ...strings, materials: [], cutList: [] });
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
   });
 });
@@ -117,7 +117,7 @@ describe('2D Liang–Barsky & mehrseitige Anleitung (Regressions)', () => {
       })),
     };
     const c = construct(many);
-    const bytes = await buildPdf(c, {
+    const { pages } = await buildPdf(c, {
       title: 'Grosses Projekt',
       subtitle: 'Organizer Studio',
       calibration: '50 mm',
@@ -128,12 +128,11 @@ describe('2D Liang–Barsky & mehrseitige Anleitung (Regressions)', () => {
         .map((p) => ({ label: p.id, size: `${p.w} x ${p.h}`, count: `${p.count}x`, tiles: '1' })),
       instructions: c.operations.map((o) => ({ index: o.index, phase: o.phase, text: `Schritt ${o.index}: ${o.titleKey}` })),
       footer: 'Footer',
+      piece: 'Teile',
     });
-    const { PDFDocument } = await import('pdf-lib');
-    const doc = await PDFDocument.load(bytes);
     const { tilePiece } = await import('../core/export');
     const tileCount = c.pieces.filter((p) => p.kind === 'cut').reduce((n, p) => n + tilePiece(p).length, 0);
     // Erwartet mindestens Cover + Material + Zuschnitt + >=2 Anleitungsseiten + Kacheln
-    expect(doc.getPageCount()).toBeGreaterThan(tileCount + 4);
+    expect(pages).toBeGreaterThan(tileCount + 4);
   });
 });

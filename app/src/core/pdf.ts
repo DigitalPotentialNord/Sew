@@ -97,6 +97,8 @@ export interface PdfStrings {
   readonly cutList: readonly { label: string; size: string; count: string; tiles: string }[];
   readonly instructions: readonly { index: number; phase: string; text: string }[];
   readonly footer: string;
+  /** Zählwort für „{n} Teil(e)“ auf dem Deckblatt — Pluralwahl trifft der Aufrufer. */
+  readonly piece: string;
 }
 
 /** Ein Blatt Papier im PDF-Koordinatensystem (Ursprung unten links). */
@@ -162,7 +164,13 @@ function listPages(
   footer(p, footerText);
 }
 
-export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Array> {
+export interface BuiltPdf {
+  readonly bytes: Uint8Array;
+  /** Tatsächliche Seitenzahl des erzeugten Dokuments (doc.getPageCount()). */
+  readonly pages: number;
+}
+
+export async function buildPdf(c: Construction, s: PdfStrings): Promise<BuiltPdf> {
   const doc = await PDFDocument.create();
   doc.setTitle(safe(s.title));
   doc.setCreator('Organizer Studio');
@@ -186,7 +194,7 @@ export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Arr
     // Kopfzahlen
     const stats = [
       `${c.flap.w} × ${c.flap.h} mm`,
-      `${cut.length} Teile`,
+      `${cut.length} ${s.piece}`,
       `${c.materials.length} Materialzeilen`,
     ];
     p.page.drawText(safe(stats.join('   ·   ')), { x: p.left, y, size: 9, color: INK });
@@ -252,7 +260,7 @@ export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Arr
     footer(page, s.footer);
   }
 
-  return doc.save();
+  return { bytes: await doc.save(), pages: doc.getPageCount() };
 }
 
 /** Schneidet ein beliebiges Liniensegment auf ein Kachelfenster zu (Liang–Barsky). */

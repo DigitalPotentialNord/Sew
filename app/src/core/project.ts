@@ -314,7 +314,9 @@ export function toFile(p: Project): ProjectFile {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: nowIso(),
     appVersion,
-    project: p,
+    // Ein leerer Name wäre nicht wieder importierbar (Schema: min 1) —
+    // beim Export auf einen gültigen Namen normalisieren.
+    project: { ...p, name: p.name.trim() || 'Ohne Namen' },
   };
 }
 

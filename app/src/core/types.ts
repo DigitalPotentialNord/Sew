@@ -87,6 +87,8 @@ export interface OpSpec {
   readonly dependsOn: readonly string[];
   readonly titleKey: LocalizedKey;
   readonly values: Readonly<Record<string, number | string | undefined>>;
+  /** Optional: Phase überschreiben (Default ist die Art-basierte Zuordnung in construction.ts). */
+  readonly phase?: SewingOperation['phase'];
 }
 
 export interface SewingOperation extends OpSpec {

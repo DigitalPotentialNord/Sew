@@ -1,6 +1,6 @@
 /** Nähanleitung — generiert aus den echten Operationen der Konstruktion. */
 import { useStore } from '../state/store';
-import { formatAmount } from '../core/construction';
+import { formatAmount, PHASE_ORDER } from '../core/construction';
 import { t } from '../i18n/de';
 import { Button, Panel } from './parts/primitives';
 import { Icon } from './icons';
@@ -14,7 +14,7 @@ export function InstructionsView({ onPrint }: { onPrint: () => void }): JSX.Elem
     const arr = byPhase.get(op.phase) ?? [];
     byPhase.set(op.phase, [...arr, op]);
   }
-  const phaseOrder = ['prepare', 'cut', 'sew-order', 'assemble', 'finish'];
+  const phaseOrder = PHASE_ORDER;
 
   return (
     <div className="view-scroll">
@@ -74,7 +74,6 @@ export function InstructionsView({ onPrint }: { onPrint: () => void }): JSX.Elem
               <ol className="steps">
                 {(byPhase.get(ph) ?? []).map((op) => (
                   <li key={op.id}>
-                    <span />
                     <div>
                       <span className="step-phase">{op.index}</span>
                       <div className="step-text">{t(op.titleKey, op.values)}</div>

@@ -25,6 +25,8 @@ export const PRACTICE = {
   threadDensityFactor: 3.4,
   /** Einzugsreserve je Bandende (M04). */
   elasticTailMm: 10,
+  /** Typische Breite von Einlage (H250) und Vlies — Meterware vs. Zuschnitte. [H] */
+  interfacingWidthMm: 900,
   /** Mindestlänge einer Reißverschlussöffnung. */
   minZipMm: 80,
   /** Toleranz für die Maßhaltigkeit im Druck (± mm bei 50 mm). */
@@ -40,4 +42,6 @@ export const LIMITS = {
   maxModulesPerChannel: 24,
   channelFillWarnPct: 98,
   channelFillInfoPct: 40,
+  /** Ziel-Auslastung für den V-G-08-Verbreiterungs-Fix (≤ 95 % nach Anwendung). */
+  channelFillTargetPct: 95,
 } as const;

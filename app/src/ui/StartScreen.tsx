@@ -41,12 +41,24 @@ export function StartScreen(): JSX.Element {
 
   const [type, setType] = useState<OrgType | null>(null);
   const [how, setHow] = useState<How | null>(null);
-  const [w, setW] = useState(240);
-  const [h, setH] = useState(200);
+  // Eingabefelder als String-Entwürfe — erst bei blur/Enter/„Beginnen“ klemmen,
+  // sonst springt „300“ beim Tippen auf 80 zurück.
+  const [wDraft, setWDraft] = useState('240');
+  const [hDraft, setHDraft] = useState('200');
 
   const typeDef = TYPES.find((x) => x.id === type) ?? null;
   // Für Typen ohne Vorlage ist „Mit Vorlage" nicht verfügbar.
   const canTemplate = typeDef?.template !== undefined;
+
+  const readSize = (draft: string, min: number, max: number, fallback: number): number => {
+    const n = Number(draft);
+    const v = Number.isFinite(n) ? n : fallback;
+    return Math.round(Math.max(min, Math.min(max, v)));
+  };
+  const commitDraft = (which: 'w' | 'h'): void => {
+    if (which === 'w') setWDraft(String(readSize(wDraft, LIMITS.baseWidthMm.min, LIMITS.baseWidthMm.max, 240)));
+    else setHDraft(String(readSize(hDraft, LIMITS.baseHeightMm.min, LIMITS.baseHeightMm.max, 200)));
+  };
 
   const begin = (): void => {
     if (!typeDef) {
@@ -58,8 +70,8 @@ export function StartScreen(): JSX.Element {
       loadTemplate(typeDef.template, { force: true });
     } else {
       newProject({ force: true });
-      const baseW = method === 'custom' ? w : typeDef.base!.w;
-      const baseH = method === 'custom' ? h : typeDef.base!.h;
+      const baseW = method === 'custom' ? readSize(wDraft, LIMITS.baseWidthMm.min, LIMITS.baseWidthMm.max, 240) : typeDef.base!.w;
+      const baseH = method === 'custom' ? readSize(hDraft, LIMITS.baseHeightMm.min, LIMITS.baseHeightMm.max, 200) : typeDef.base!.h;
       setPar((p) => ({
         ...p,
         name: t(typeDef.labelKey),
@@ -88,8 +100,8 @@ export function StartScreen(): JSX.Element {
                 setType(td.id);
                 setHow(null);
                 if (td.base) {
-                  setW(td.base.w);
-                  setH(td.base.h);
+                  setWDraft(String(td.base.w));
+                  setHDraft(String(td.base.h));
                 }
               }}
             >
@@ -132,8 +144,12 @@ export function StartScreen(): JSX.Element {
                     inputMode="numeric"
                     min={LIMITS.baseWidthMm.min}
                     max={LIMITS.baseWidthMm.max}
-                    value={w}
-                    onChange={(e) => setW(Math.max(LIMITS.baseWidthMm.min, Math.min(LIMITS.baseWidthMm.max, Number(e.target.value) || LIMITS.baseWidthMm.min)))}
+                    value={wDraft}
+                    onChange={(e) => setWDraft(e.target.value)}
+                    onBlur={() => commitDraft('w')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitDraft('w');
+                    }}
                   />
                 </div>
                 <div className="start-size-field">
@@ -144,8 +160,12 @@ export function StartScreen(): JSX.Element {
                     inputMode="numeric"
                     min={LIMITS.baseHeightMm.min}
                     max={LIMITS.baseHeightMm.max}
-                    value={h}
-                    onChange={(e) => setH(Math.max(LIMITS.baseHeightMm.min, Math.min(LIMITS.baseHeightMm.max, Number(e.target.value) || LIMITS.baseHeightMm.min)))}
+                    value={hDraft}
+                    onChange={(e) => setHDraft(e.target.value)}
+                    onBlur={() => commitDraft('h')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitDraft('h');
+                    }}
                   />
                 </div>
               </div>

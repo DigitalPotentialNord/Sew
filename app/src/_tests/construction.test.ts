@@ -38,13 +38,26 @@ describe('Determinismus (P-02, I7)', () => {
     expect(construct(p).projectHash).toBe(construct(q).projectHash);
   });
 
-  it('Modul-IDs und Dateireihenfolge ändern den Hash nicht — die Absicht zählt (I7)', () => {
+  it('Modul-IDs ändern den Hash nicht — die Absicht zählt (I7)', () => {
     const p = baseProject();
     const a = makeInstance('M01', 'r1');
     const b = makeInstance('M09', 'r1');
     const renamed = { ...a, id: 'voellig-andere-id' };
-    expect(construct({ ...p, modules: [a, b] }).projectHash).toBe(construct({ ...p, modules: [b, a] }).projectHash);
     expect(construct({ ...p, modules: [a, b] }).projectHash).toBe(construct({ ...p, modules: [renamed, b] }).projectHash);
+  });
+
+  it('Modulreihenfolge innerhalb einer Zeile ändert den Hash (#15)', () => {
+    // Die Reihenfolge bestimmt die Platzierung (x-Cursor in layout()), also ist sie
+    // Teil der Konstruktion — der Hash muss sie widerspiegeln.
+    const p = baseProject();
+    const a = makeInstance('M01', 'r1');
+    const b = makeInstance('M09', 'r1');
+    expect(construct({ ...p, modules: [a, b] }).projectHash).not.toBe(construct({ ...p, modules: [b, a] }).projectHash);
+    // Reihenfolge des Array-Eintrags über Zeilengrenzen ist dagegen NICHT Teil der
+    // Konstruktion (Layout läuft zeilenweise in Projekt-Reihenfolge): stabiler Hash.
+    const c = makeInstance('M04', 'r2');
+    const q = { ...p, rows: [{ id: 'r1', name: 'Zeile 1' }, { id: 'r2', name: 'Zeile 2' }] };
+    expect(construct({ ...q, modules: [a, c] }).projectHash).toBe(construct({ ...q, modules: [c, a] }).projectHash);
   });
 
   it('geänderte Modulwahl ändert den Hash', () => {
@@ -532,17 +545,21 @@ describe('Unabhängigkeit von der Umgebung', () => {
         practice: PRACTICE.version,
         base: p.base,
         rows: p.rows.map((r) => r.name),
-        modules: p.modules
-          .map((m) => ({
-            typeId: m.typeId,
-            row: p.rows.findIndex((r) => r.id === m.rowId),
-            params: Object.keys(m.params)
-              .sort()
-              .map((k) => [k, m.params[k]]),
-            rotation: m.rotation,
-            side: m.side,
-          }))
-          .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+        modules: (() => {
+          const rowIndex = new Map(p.rows.map((r, i) => [r.id, i]));
+          return p.modules
+            .map((m, i) => ({ m, i, row: rowIndex.get(m.rowId) ?? p.rows.length }))
+            .sort((a, b) => a.row - b.row || a.i - b.i)
+            .map(({ m, row }) => ({
+              typeId: m.typeId,
+              row,
+              params: Object.keys(m.params)
+                .sort()
+                .map((k) => [k, m.params[k]]),
+              rotation: m.rotation,
+              side: m.side,
+            }));
+        })(),
         settings: p.settings,
       }),
     );
@@ -676,7 +693,9 @@ describe('Stoffbreite & Skalierungsstress (V-G-12 & 60 Module)', () => {
     expect(f!.fix?.kind).toBe('setFabricWidth');
   });
 
-  it('60 Module (ca. 245 Operationen) bleiben azyklisch und konstruieren schnell', () => {
+  it('60 Module (≥ 150 Operationen) bleiben azyklisch und konstruieren schnell', () => {
+    // Schwelle an die korrekte Operationsmenge angepasst: seit #16 emittiert M06
+    // „stitch-divider“ nur noch bei paare > 1 (bei 1 Paar gibt es keine Trennnaht).
     const tpl = buildTemplate('strick');
     const mods: Instance[] = Array.from({ length: 60 }, (_, i) => ({
       ...tpl.modules[i % tpl.modules.length]!,
@@ -685,7 +704,7 @@ describe('Stoffbreite & Skalierungsstress (V-G-12 & 60 Module)', () => {
     const t0 = performance.now();
     const c = construct({ ...tpl, modules: mods });
     const dt = performance.now() - t0;
-    expect(c.operations.length).toBeGreaterThan(200);
+    expect(c.operations.length).toBeGreaterThan(150);
     expect(dt).toBeLessThan(500);
     const pos = new Map(c.operations.map((o, i) => [o.id, i]));
     for (const op of c.operations) {
