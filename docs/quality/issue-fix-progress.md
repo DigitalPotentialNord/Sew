@@ -38,11 +38,12 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 
 ## Bekannte Abnahme-Lücken (ehrlich)
 
-1. ~~**Kein Playwright-E2E lokal ausführbar**~~ — Browser-Download blockiert lokal, dafür
-   läuft die Suite in CI („Abnahmetests“). Erster Lauf des PR #23: 3 Alt-Tests rot gegen die
-   neuen, korrekten Zustände (Fehleranzahl 5 → 8 durch #18-Höhenvalidierung; `.finding.error`
-   2 → 4 durch #18; Feldlabels „Höhe“/„Breite“ tauschen bei 90° durch #12). Test-Erwartungen
-   angepasst (Commit folgt) — keine Logikänderung.
+1. ~~**E2E-Abnahme**~~ — Playwright läuft in CI („Abnahmetests“), lokal ist der
+   Browser-Download blockiert. Erster Lauf des PR #23 war rot: 3 Alt-Tests gegen die neuen,
+   korrekten Zustände (Fehleranzahl Tabbar/Toast 5 → 8 durch #18-Höhenvalidierung;
+   `.finding.error` 2 → 4 durch #18; Feldlabels „Höhe“/„Breite“ tauschen bei 90° durch #12;
+   Exportknöpfe sind bei Fehlern `disabled` mit Sperrtitel, kein Klick-Toast mehr durch #22).
+   Test-Erwartungen angepasst (Commit `5d09e18`) — keine Logikänderung. **CI grün (beide Jobs).**
 2. **Visuelle Prüfung fehlt** — insbesondere #12 (Falz-Beschriftung, Überstand-Markierung,
    Kontextleisten-Platzierung) und #19 (Starter bei 796×734). Screenshots unter `docs-shots/`
    sind auf dem Stand vor diesen Fixes.
@@ -74,7 +75,8 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 
 ## Nächste Schritte
 
-1. CI abwarten; Fehlschläge (insb. E2E) beheben.
+1. ~~CI abwarten; Fehlschläge (insb. E2E) beheben.~~ — CI grün (beide Jobs) seit Commit
+   `5d09e18`.
 2. Nutzer-Review des Sammel-PRs; Merge nur mit Freigabe.
 3. Nach Merge: Issues #12–#22 schließen (dann `Fixes` statt `Refs` verwenden).
 4. Gegebenenfalls #13 (cm-Anzeige, vollständig) und #12-Fachentscheidung (Auto-Zeilenumbruch)
