@@ -84,3 +84,11 @@ jobs:
 
       - name: Abnahmetests ausführen
         run: npx playwright test
+
+      - name: Test-Ergebnisse hochladen
+        uses: actions/upload-artifact@b4b333b918d38a737fcc34c63f1b9d2e1f7b4c78 # v4 (Pinned)
+        if: always()
+        with:
+          name: playwright-results
+          path: app/test-results/
+          retention-days: 14
