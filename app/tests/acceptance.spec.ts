@@ -452,12 +452,17 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     const handle = page.locator('.scale-handle').first();
     await expect(handle).toBeVisible();
     const b1 = await handle.boundingBox();
-    // Größenänderung durch Ziehen am rechten Griff: Maus auf das Handle
-    // bewegen, dann drag nach rechts.
+    // Größenänderung durch Ziehen am rechten Griff. pointerdown direkt
+    // auf dem SVG-Element auslösen (page.mouse.down trifft das kleine
+    // SVG-Rect nicht immer zuverlässig), dann per page.mouse.move ziehen.
     const hx = b1!.x + b1!.width / 2;
     const hy = b1!.y + b1!.height / 2;
-    await page.mouse.move(hx, hy);
-    await page.mouse.down();
+    await handle.evaluate((el, coords) => {
+      el.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse',
+        button: 0, clientX: coords.x, clientY: coords.y,
+      }));
+    }, { x: hx, y: hy });
     await page.mouse.move(hx + 60, hy, { steps: 12 });
     await page.mouse.up();
     expect(Number(await wInput.inputValue())).toBeGreaterThan(70);
@@ -469,8 +474,12 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     const b2 = await handle2.boundingBox();
     const h2x = b2!.x + b2!.width / 2;
     const h2y = b2!.y + b2!.height / 2;
-    await page.mouse.move(h2x, h2y);
-    await page.mouse.down();
+    await handle2.evaluate((el, coords) => {
+      el.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, pointerId: 2, pointerType: 'mouse',
+        button: 0, clientX: coords.x, clientY: coords.y,
+      }));
+    }, { x: h2x, y: h2y });
     await page.mouse.move(h2x + 60, h2y, { steps: 12 });
     await page.mouse.up();
     const hAfter = Number(await hInput.inputValue());
