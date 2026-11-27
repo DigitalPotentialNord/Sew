@@ -139,7 +139,12 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
         className="project-name"
         value={project.name}
         onChange={(e) => setPar((p) => ({ ...p, name: e.target.value }), { undoable: false })}
-        aria-label="Projektname"
+        onBlur={() => {
+          if (!project.name.trim()) {
+            setPar((p) => ({ ...p, name: t('proj.untitled') }), { undoable: false });
+          }
+        }}
+        aria-label={t('proj.name')}
         spellCheck={false}
       />
       <div className="topbar-group desktop-only">

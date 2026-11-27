@@ -114,7 +114,12 @@ export function ProjectView(): JSX.Element {
                 className="project-name"
                 style={{ border: '1px solid var(--line-strong)', flex: 1 }}
                 value={project.name}
-                onChange={(e) => setPar((p) => ({ ...p, name: e.target.value || 'Ohne Namen' }))}
+                onChange={(e) => setPar((p) => ({ ...p, name: e.target.value }))}
+                onBlur={() => {
+                  if (!project.name.trim()) {
+                    setPar((p) => ({ ...p, name: t('proj.untitled') }), { undoable: false });
+                  }
+                }}
                 aria-label={t('proj.name')}
               />
             </div>

@@ -183,11 +183,13 @@ export const useStore = create<StoreState>((set, get) => {
   // Erster Besuch ohne gespeichertes Projekt → Starter öffnen. Wer schon ein
   // Projekt hat, landet direkt im Editor (kein again-and-again-Dialog).
   const initialSession: EditorSession = { ...emptySession, startOpen: storedOnEntry === null };
-  // Konservativ: fragt auch dann, wenn seit dem Sessionbeginn editiert (und danach
-  // gespeichert) wurde — lieber einmal zu viel fragen als Unbezahltes zu löschen.
-  // `past.length > 0` überlebt auch ein zwischenzeitliches Undo nicht: nach beliebig
-  // vielen Undo bleibt die Historie bis zum Laden gefüllt.
-  const isDirty = (): boolean => get().past.length > 0;
+  // Dirty = seit dem Laden/Speichern wurde editiert UND der Stand ist nicht gespeichert:
+  // `past` trägt die zurücknehmbaren Bearbeitungen, `saved` wird von jeder
+  // Bearbeitung gelöscht und nur von save()/applyFreshProject gesetzt. Nach save()
+  // ist `past` noch gefüllt (Undo bleibt möglich), aber `saved: true` → nicht
+  // mehr dirty, also keine Verwerfen-Rückfrage. Undo hinter den Speicherpunkt
+  // zurück leert `past` und ist damit ebenfalls sauber.
+  const isDirty = (): boolean => get().past.length > 0 && !get().saved;
   const applyFreshProject = (p: Project, saved: boolean, keepView = false): void => {
     saveCurrent(p);
     set({
@@ -353,7 +355,8 @@ export const useStore = create<StoreState>((set, get) => {
     renameRowAction: (rowId, name) => get().setPar((p) => renameRow(p, rowId, name)),
 
     save: () => {
-      const p = { ...get().project, updatedAt: nowIso() };
+      // Leerer Name wäre exportiert/zurückgeladen nicht valide — auf gültigen Namen setzen.
+      const p = { ...get().project, name: get().project.name.trim() || t('proj.untitled'), updatedAt: nowIso() };
       const okLibrary = saveToLibrary(p);
       const okCurrent = saveCurrent(p);
       if (!okLibrary || !okCurrent) {

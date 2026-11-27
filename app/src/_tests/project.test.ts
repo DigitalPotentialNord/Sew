@@ -459,3 +459,20 @@ describe('Security & Boundary-Validierung', () => {
     expect(validateProject({ ...p, modules: [mHuge] }).ok).toBe(false);
   });
 });
+
+
+describe('toFile — Export-Vertrag (Issue #14)', () => {
+  it('leert ein leeres Namensfeld auf einen gültigen Namen', () => {
+    const p = { ...buildTemplate('schmuck'), name: '' };
+    const file = toFile(p);
+    expect(file.project.name.trim().length).toBeGreaterThan(0);
+    // und ist re-importierbar (Zod: name min 1)
+    expect(fromFile(file).ok).toBe(true);
+  });
+
+  it('getrimmter Leername wird ebenfalls normalisiert', () => {
+    const p = { ...buildTemplate('schmuck'), name: '   ' };
+    const file = toFile(p);
+    expect(file.project.name.trim().length).toBeGreaterThan(0);
+  });
+});

@@ -510,6 +510,7 @@ export const de = {
   // ── Projekt-Tab ────────────────────────────────────────────────────────────
   'proj.title': 'Projekt',
   'proj.name': 'Name',
+  'proj.untitled': 'Ohne Namen',
   'proj.base': 'Grundfläche',
   'proj.width': 'Breite',
   'proj.height': 'Höhe',
