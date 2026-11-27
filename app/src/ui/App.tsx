@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 /** Reaktiv: ist die Ansicht aktuell ≤ 1000 px (Tablet/Smartphone)? */
 function useIsMobile(): boolean {
@@ -21,13 +21,17 @@ import { Properties } from './Properties';
 import { Warnings } from './Warnings';
 import { isInteractiveTarget } from './isInteractiveTarget';
 import { findingKey } from '../core/fixes';
-import { MaterialsView } from './MaterialsView';
-import { PatternView } from './PatternView';
-import { InstructionsView } from './InstructionsView';
-import { ProjectView } from './ProjectView';
-import { StartScreen } from './StartScreen';
+import { QualityBadge } from './QualityCard';
 import { Icon } from './icons';
 import { Button, Sheet } from './parts/primitives';
+
+// Sekundäre Tabs, Starter-Assistent & Hilfe-Dialog werden bei Bedarf geladen — hält den Editor-Start leichtgewichtig.
+const StartScreen = lazy(() => import('./StartScreen').then((m) => ({ default: m.StartScreen })));
+const ShortcutsModal = lazy(() => import('./ShortcutsModal'));
+const MaterialsView = lazy(() => import('./MaterialsView').then((m) => ({ default: m.MaterialsView })));
+const PatternView = lazy(() => import('./PatternView').then((m) => ({ default: m.PatternView })));
+const InstructionsView = lazy(() => import('./InstructionsView').then((m) => ({ default: m.InstructionsView })));
+const ProjectView = lazy(() => import('./ProjectView').then((m) => ({ default: m.ProjectView })));
 
 type View = 'editor' | 'pattern' | 'materials' | 'instructions' | 'project';
 
@@ -42,43 +46,74 @@ export function App(): JSX.Element {
   const errors = c.findings.filter((f) => f.severity === 'error').length;
   const warns = c.findings.filter((f) => f.severity === 'warn').length;
   const startOpen = useStore((s) => s.session.startOpen);
+  const helpOpen = useStore((s) => s.session.helpOpen);
+  const setHelpOpen = useStore((s) => s.setHelpOpen);
 
   // Tastatur-Kürzel
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const remove = useStore((s) => s.remove);
   const duplicate = useStore((s) => s.duplicate);
+  const save = useStore((s) => s.save);
+  const selectAll = useStore((s) => s.selectAll);
   const selection = useStore((s) => s.session.selection);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      const state = useStore.getState();
       const target = e.target as HTMLElement | null;
       const mod = e.metaKey || e.ctrlKey;
+
+      // Offene Modale / Dialoge fangen Tastaturkürzel ab — nur Escape schließt sie,
+      // damit dahinter keine Module gelöscht, gedreht oder Tabs gewechselt werden.
+      if (state.pendingDiscard || state.session.startOpen || state.session.helpOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (state.pendingDiscard) state.cancelPendingDiscard();
+          else if (state.session.helpOpen) setHelpOpen(false);
+          else if (state.session.startOpen) state.setStartOpen(false);
+        }
+        return;
+      }
+
       // Textfelder und Bedienelemente behalten ihre Tastatur: normale Kürzel
       // (Delete, r, Ziffern) greifen nur ohne Fokus auf interaktiven Zielen;
-      // Strg/Cmd+Z/Y bleibt überall erlaubt außer in Texteingaben.
+      // Strg/Cmd+Z/Y/S bleibt überall erlaubt außer in Texteingaben.
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return;
       if (!mod && isInteractiveTarget(target)) return;
+      const onOpenCanvas = view === 'editor' && !state.session.folded;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
       } else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
         e.preventDefault();
         redo();
-      } else if (mod && e.key.toLowerCase() === 'd' && selection.length > 0) {
+      } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        const first = selection[0];
-        if (first) duplicate(first);
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selection.length > 0) {
+        save();
+      } else if (mod && e.key.toLowerCase() === 'a' && onOpenCanvas) {
+        e.preventDefault();
+        selectAll();
+      } else if (mod && e.key.toLowerCase() === 'd' && onOpenCanvas && selection.length > 0) {
+        e.preventDefault();
+        if (selection.length > 1) state.batchDuplicate(selection);
+        else {
+          const first = selection[0];
+          if (first) duplicate(first);
+        }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && onOpenCanvas && selection.length > 0) {
         e.preventDefault();
         remove(selection);
       } else if (e.key === 'Escape') {
-        useStore.getState().select([]);
-      } else if (e.key.toLowerCase() === 'r' && selection.length === 1) {
+        state.select([]);
+      } else if (e.key === '?' && !mod) {
+        e.preventDefault();
+        setHelpOpen(!state.session.helpOpen);
+      } else if (e.key.toLowerCase() === 'r' && onOpenCanvas && selection.length === 1) {
         // Drehen als zusätzlicher Kurzbefehl bei Einzelwahl — visuell auffindbar
         // bleibt der Drehen-Knopf in der Kontextleiste/Eigenschaften.
         e.preventDefault();
-        useStore.getState().rotate(selection[0]!);
+        state.rotate(selection[0]!);
       } else if (e.key === '1') setView('editor');
       else if (e.key === '2') setView('pattern');
       else if (e.key === '3') setView('materials');
@@ -87,20 +122,33 @@ export function App(): JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, remove, duplicate, selection, setView]);
+  }, [undo, redo, remove, duplicate, save, selectAll, selection, setView, setHelpOpen, view]);
 
   return (
     <ErrorBoundary>
       <div className="app">
-        <Topbar view={view} setView={setView} errors={errors} warns={warns} saved={saved} />
+        <Topbar errors={errors} warns={warns} saved={saved} />
         <Tabbar view={view} setView={setView} errors={errors} warns={warns} modules={project.modules.length} pieces={c.metrics.cutPieceCount} />
-        {startOpen ? <StartScreen /> : null}
+        {startOpen ? (
+          <Suspense fallback={null}>
+            <StartScreen />
+          </Suspense>
+        ) : null}
+        {helpOpen ? (
+          <Suspense fallback={null}>
+            <ShortcutsModal onClose={() => setHelpOpen(false)} />
+          </Suspense>
+        ) : null}
         <main className={`workspace${view === 'editor' ? '' : ' full'}`}>
           {view === 'editor' ? <EditorWorkspace /> : null}
-          {view === 'pattern' ? <PatternHost /> : null}
-          {view === 'materials' ? <MaterialsView /> : null}
-          {view === 'instructions' ? <InstructionsHost /> : null}
-          {view === 'project' ? <ProjectView /> : null}
+          {view !== 'editor' ? (
+            <Suspense fallback={null}>
+              {view === 'pattern' ? <PatternHost /> : null}
+              {view === 'materials' ? <MaterialsView /> : null}
+              {view === 'instructions' ? <InstructionsHost /> : null}
+              {view === 'project' ? <ProjectView /> : null}
+            </Suspense>
+          ) : null}
         </main>
         <Statusbar />
         <DiscardConfirm />
@@ -115,7 +163,7 @@ export function App(): JSX.Element {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View) => void; errors: number; warns: number; saved: boolean }): JSX.Element {
+function Topbar({ errors, warns, saved }: { errors: number; warns: number; saved: boolean }): JSX.Element {
   const project = useStore((s) => s.project);
   const setPar = useStore((s) => s.setPar);
   const undo = useStore((s) => s.undo);
@@ -130,6 +178,8 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
   const setWarnOpen = useStore((s) => s.setWarnOpen);
   const propsOpen = useStore((s) => s.session.propsOpen);
   const setPropsOpen = useStore((s) => s.setPropsOpen);
+  const setStartOpen = useStore((s) => s.setStartOpen);
+  const setHelpOpen = useStore((s) => s.setHelpOpen);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -162,10 +212,33 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
         <Button icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'} onClick={() => { setLibOpen(false); setPropsOpen(false); setWarnOpen(!warnOpen); }} active={warnOpen} title={t('warn.title')} />
       </div>
       <div className="topbar-group desktop-only">
+        <Button icon="sparkle" onClick={() => setStartOpen(true)} title={t('top.wizardHint')}>
+          {t('top.wizard')}
+        </Button>
+        <Button icon="help" onClick={() => setHelpOpen(true)} title={t('shortcuts.title')} ariaLabel={t('shortcuts.title')} />
+      </div>
+      <div className="topbar-sep desktop-only" />
+      <div className="topbar-group desktop-only">
         <Button icon="save" onClick={save} title={t('top.save')} />
         <Button icon="upload" onClick={() => fileRef.current?.click()} title={t('top.import')} />
-        <Button icon="download" onClick={() => { const data = useStore.getState().exportProject(); downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify(data, null, 2)); toast(t('toast.exported'), 'ok'); }} title={t('top.exportProject')} />
-        <Button icon="image" onClick={() => { downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(useStore.getState().construction)); toast(t('toast.svgSaved'), 'ok'); }} disabled={errors > 0} title={errors > 0 ? t('pattern.blocked', { n: errors }) : t('top.exportSvg')} />
+        <Button
+          icon="download"
+          onClick={() => {
+            const data = useStore.getState().exportProject();
+            downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify(data, null, 2));
+            toast(t('toast.exported'), 'ok');
+          }}
+          title={t('top.exportProject')}
+        />
+        <Button
+          icon="image"
+          onClick={() => {
+            downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(useStore.getState().construction));
+            toast(t('toast.svgSaved'), 'ok');
+          }}
+          disabled={errors > 0}
+          title={errors > 0 ? t('pattern.blocked', { n: errors }) : t('top.exportSvg')}
+        />
         <input
           ref={fileRef}
           type="file"
@@ -195,7 +268,6 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
       <span className="desktop-only" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 4 }}>
         {saved ? t('top.status.saved') : t('top.status.unsaved')}
       </span>
-      <span style={{ display: 'none' }}>{view}</span>
     </header>
   );
 }
@@ -223,6 +295,7 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
     }
     setBusy(true);
     try {
+      const { buildPdf } = await import('../core/pdf');
       const state = useStore.getState();
       const c = state.construction;
       const project = state.project;
@@ -250,9 +323,8 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
           text: t(op.titleKey, op.values),
         })),
         piece: c.pieces.filter((pc) => pc.kind === 'cut').length === 1 ? t('print.piece') : t('print.pieces'),
-        footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
+        footer: `${t('app.name')} · ${project.name} · Qualität ${c.evaluation.score}/100 (${c.evaluation.grade}) · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
       };
-      const { buildPdf } = await import('../core/pdf');
       const { bytes, pages } = await buildPdf(c, strings);
       downloadText(fileName(project.name, 'schnittmuster', 'pdf'), 'application/pdf', bytes);
       toast(t('toast.pdfSaved', { n: pages }), 'ok');
@@ -391,22 +463,20 @@ function WarningsCollapsed(): JSX.Element {
   const warns = visible.filter((f) => f.severity === 'warn');
 
   return (
-    <div style={{ borderBottom: '1px solid var(--line)', flex: 'none', maxHeight: open ? 240 : 34, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button className="props-head" onClick={() => setOpen(!open)} aria-expanded={open} style={{ height: 34, flex: 'none' }}>
+    <div className={`eval-drawer${open ? ' open' : ''}`}>
+      <button className="props-head eval-drawer-head" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="chev" style={{ display: 'grid', transform: open ? 'none' : 'rotate(-90deg)' }}>
           <Icon name="chevronDown" size={12} />
         </span>
         <span style={{ flex: 1 }}>{t('warn.title')}</span>
-        <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {errors.length > 0 ? (
-            <span style={{ color: 'var(--error)', fontWeight: 700 }}>{errors.length}</span>
-          ) : null}
-          {warns.length > 0 ? <span style={{ color: 'var(--warn)', fontWeight: 700 }}>{warns.length}</span> : null}
-          {visible.length === 0 ? <Icon name="check" size={12} /> : null}
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <QualityBadge evaluation={c.evaluation} compact />
+          {errors.length > 0 ? <span className="eval-cnt err">{errors.length}</span> : null}
+          {warns.length > 0 ? <span className="eval-cnt warn">{warns.length}</span> : null}
         </span>
       </button>
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        <Warnings />
+      <div className="eval-drawer-body">
+        <Warnings compact />
       </div>
     </div>
   );
@@ -458,6 +528,10 @@ function Statusbar(): JSX.Element {
         {errors > 0 ? <strong>{t('warn.errors', { n: errors })}</strong> : warns > 0 ? <strong>{t(warns === 1 ? 'warn.warnsOne' : 'warn.warns', { n: warns })}</strong> : <strong>{t('warn.none')}</strong>}
       </span>
       <span className="status-sep">·</span>
+      <span className="mono">
+        {t('eval.score')} {c.evaluation.score} ({c.evaluation.grade})
+      </span>
+      <span className="status-sep">·</span>
       <span>
         {c.metrics.moduleCount} Module · {t(c.metrics.cutPieceCount === 1 ? 'pattern.piece' : 'pattern.pieces', { n: c.metrics.cutPieceCount })}
       </span>
@@ -504,7 +578,7 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
     step: 'Schritt',
     materialExact: t('mat.tab.exact'),
     materialEstimated: t('mat.tab.estimated'),
-    footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash} · ${new Date().toLocaleDateString('de-DE')}`,
+    footer: `${t('app.name')} · ${project.name} · Qualität ${c.evaluation.score}/100 (${c.evaluation.grade}) · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash} · ${new Date().toLocaleDateString('de-DE')}`,
     legend: 'Schnittlinie durchgezogen · Nählinie gestrichelt · Fadenlauf mit Pfeil · Knipse kurz.',
   };
 

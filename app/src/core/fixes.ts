@@ -5,10 +5,43 @@
 import { clamp } from './geometry';
 import { moduleDef } from './modules';
 import { LIMITS } from './practice';
-import type { Finding, FixKind } from './types';
-import type { Project } from './construction';
+import type { Finding, FixKind, Side } from './types';
+import type { Instance, Project } from './construction';
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Reine, idempotente Atom-Verschiebung eines Moduls auf `(side, rowId, index)`
+ * — wobei `index` der 0-basierte Platz INNERHALB von `(rowId, side)` ist.
+ * Die Reihenfolge aller anderen Zeilen und der Gegenseite bleibt unberührt.
+ */
+export function relocateInModules(
+  modules: readonly Instance[],
+  moduleId: string,
+  side: Side,
+  rowId: string,
+  index: number,
+): readonly Instance[] {
+  const inst = modules.find((m) => m.id === moduleId);
+  if (!inst) return modules;
+  const rest = modules.filter((m) => m.id !== moduleId);
+  const sameSlotIndices: number[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const m = rest[i]!;
+    if (m.rowId === rowId && m.side === side) sameSlotIndices.push(i);
+  }
+  const clamped = Math.round(clamp(index, 0, sameSlotIndices.length));
+  const moved: Instance = { ...inst, rowId, side };
+  let insertAt: number;
+  if (sameSlotIndices.length === 0) {
+    insertAt = rest.length;
+  } else if (clamped >= sameSlotIndices.length) {
+    insertAt = sameSlotIndices[sameSlotIndices.length - 1]! + 1;
+  } else {
+    insertAt = sameSlotIndices[clamped]!;
+  }
+  return [...rest.slice(0, insertAt), moved, ...rest.slice(insertAt)];
+}
 
 /** Stabile Identität eines Findings — für Ausblenden und Deduplizieren. */
 export function findingKey(f: Finding): string {
@@ -46,6 +79,23 @@ export function applyFix(p: Project, fix: FixKind): Project {
         ...p,
         base: { ...p.base, cornerRadiusMm: Math.round(clamp(fix.toMm, LIMITS.cornerRadiusMm.min, LIMITS.cornerRadiusMm.max)) },
       });
+    case 'setSpineWidth':
+      return touch({
+        ...p,
+        base: { ...p.base, spineWidthMm: Math.round(clamp(fix.toMm, LIMITS.spineWidthMm.min, LIMITS.spineWidthMm.max)) },
+      });
+    case 'setRotation':
+      return touch({
+        ...p,
+        modules: p.modules.map((m) => (m.id === fix.moduleId ? { ...m, rotation: fix.rotation } : m)),
+      });
+    case 'relocateModule': {
+      if (!p.rows.some((r) => r.id === fix.rowId)) return p;
+      return touch({
+        ...p,
+        modules: relocateInModules(p.modules, fix.moduleId, fix.side, fix.rowId, fix.index),
+      });
+    }
     case 'removeModule':
       return touch({ ...p, modules: p.modules.filter((m) => m.id !== fix.moduleId) });
     case 'setParam': {

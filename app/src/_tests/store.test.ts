@@ -287,3 +287,207 @@ describe('Store: Toasts', () => {
     }
   });
 });
+
+describe('Store: Erweiterte Editor-Funktionen', () => {
+  beforeEach(reset);
+
+  it('swapSides tauscht links/rechts aller ungesperrten Module als 1 Undo-Schritt', () => {
+    const before = useStore.getState().project.modules.map((m) => ({ id: m.id, side: m.side }));
+    const pastBefore = useStore.getState().past.length;
+    useStore.getState().swapSides();
+    const after = useStore.getState().project.modules;
+    expect(useStore.getState().past.length).toBe(pastBefore + 1);
+    for (const b of before) {
+      const m = after.find((x) => x.id === b.id)!;
+      expect(m.side).toBe(b.side === 'left' ? 'right' : 'left');
+    }
+    useStore.getState().undo();
+    for (const b of before) {
+      expect(useStore.getState().project.modules.find((x) => x.id === b.id)!.side).toBe(b.side);
+    }
+  });
+
+  it('moveRowOrder verschiebt Zeilen hoch/runter und respektiert Grenzen', () => {
+    const rows0 = useStore.getState().project.rows.map((r) => r.id);
+    expect(rows0.length).toBeGreaterThanOrEqual(2);
+    useStore.getState().moveRowOrder(rows0[0]!, -1);
+    expect(useStore.getState().project.rows.map((r) => r.id)).toEqual(rows0);
+    useStore.getState().moveRowOrder(rows0[0]!, 1);
+    expect(useStore.getState().project.rows[0]!.id).toBe(rows0[1]);
+    expect(useStore.getState().project.rows[1]!.id).toBe(rows0[0]);
+    useStore.getState().undo();
+    expect(useStore.getState().project.rows.map((r) => r.id)).toEqual(rows0);
+  });
+
+  it('reorderInRow tauscht Reihenfolge zweier Module in derselben Zeile & Seite', () => {
+    useStore.getState().newProject({ force: true });
+    const rowId = useStore.getState().project.rows[0]!.id;
+    const id1 = useStore.getState().addModule('M01', rowId, 'left');
+    const id2 = useStore.getState().addModule('M01', rowId, 'left');
+    const slotBefore = useStore
+      .getState()
+      .project.modules.filter((m) => m.rowId === rowId && m.side === 'left')
+      .map((m) => m.id);
+    expect(slotBefore).toEqual([id1, id2]);
+    const ok = useStore.getState().reorderInRow(id1, 1);
+    expect(ok).toBe(true);
+    const slotAfter = useStore
+      .getState()
+      .project.modules.filter((m) => m.rowId === rowId && m.side === 'left')
+      .map((m) => m.id);
+    expect(slotAfter).toEqual([id2, id1]);
+  });
+
+  it('autoFitSpine berechnet Bundbreite automatisch passend zum Inhalt', () => {
+    useStore.getState().setPar((p) => ({ ...p, base: { ...p.base, spineWidthMm: 10 as typeof p.base.spineWidthMm } }));
+    const before = useStore.getState().project.base.spineWidthMm;
+    useStore.getState().autoFitSpine();
+    const after = useStore.getState().project.base.spineWidthMm;
+    expect(after).toBeGreaterThanOrEqual(before);
+  });
+
+  it('applyAllFixes behebt mehrere behebbare Fehler in einem atomaren Undo-Schritt', () => {
+    useStore.getState().setPar((p) => ({
+      ...p,
+      base: { ...p.base, widthMm: 120 as typeof p.base.widthMm, cornerRadiusMm: 45 as typeof p.base.cornerRadiusMm },
+    }));
+    expect(useStore.getState().construction.findings.some((f) => f.fix)).toBe(true);
+    const pastBefore = useStore.getState().past.length;
+    const fixed = useStore.getState().applyAllFixes();
+    expect(fixed).toBeGreaterThan(0);
+    expect(useStore.getState().past.length).toBe(pastBefore + 1);
+  });
+
+  it('selectAll und Mehrfach-Aktionen (batchMoveToSide, batchMoveToRow, batchSetLocked, batchDuplicate)', () => {
+    useStore.getState().selectAll();
+    const allIds = useStore.getState().session.selection;
+    expect(allIds.length).toBe(useStore.getState().project.modules.length);
+    const pair = allIds.slice(0, 2);
+    useStore.getState().batchMoveToSide(pair, 'right');
+    for (const id of pair) {
+      expect(useStore.getState().project.modules.find((m) => m.id === id)!.side).toBe('right');
+    }
+    const targetRow = useStore.getState().project.rows[1]!.id;
+    useStore.getState().batchMoveToRow(pair, targetRow);
+    for (const id of pair) {
+      expect(useStore.getState().project.modules.find((m) => m.id === id)!.rowId).toBe(targetRow);
+    }
+    useStore.getState().batchSetLocked(pair, true);
+    for (const id of pair) {
+      expect(useStore.getState().project.modules.find((m) => m.id === id)!.locked).toBe(true);
+    }
+    useStore.getState().batchSetLocked(pair, false);
+    const countBefore = useStore.getState().project.modules.length;
+    useStore.getState().batchDuplicate(pair);
+    expect(useStore.getState().project.modules.length).toBe(countBefore + pair.length);
+  });
+
+  it('toggleFolded, setFabricTheme und setHelpOpen aktualisieren die Session sauber', () => {
+    expect(useStore.getState().session.folded).toBe(false);
+    useStore.getState().toggleFolded();
+    expect(useStore.getState().session.folded).toBe(true);
+    useStore.getState().setFabricTheme('sage');
+    expect(useStore.getState().session.fabricTheme).toBe('sage');
+    useStore.getState().setHelpOpen(true);
+    expect(useStore.getState().session.helpOpen).toBe(true);
+  });
+});
+
+describe('Store: Logiktabelle & Konsistenz-Invarianten', () => {
+  beforeEach(reset);
+
+  it('L1: applyAllFixes löst auch addModule-Fixes (z. B. fehlender Verschluss V-G-10) in einem Undo-Schritt', () => {
+    useStore.getState().newProject({ force: true });
+    useStore.getState().addModule('M01');
+    // Kein Verschluss -> V-G-10 mit fix.kind === 'addModule'
+    expect(useStore.getState().construction.findings.some((f) => f.ruleId === 'V-G-10' && f.fix?.kind === 'addModule')).toBe(true);
+    const fixed = useStore.getState().applyAllFixes();
+    expect(fixed).toBeGreaterThanOrEqual(1);
+    expect(useStore.getState().project.modules.some((m) => m.typeId === 'M07' || m.typeId === 'M08')).toBe(true);
+  });
+
+  it('L2: gesperrtes Modul wird weder von applyFindingFix noch von applyAllFixes verändert', () => {
+    useStore.getState().newProject({ force: true });
+    const m06Id = useStore.getState().addModule('M06');
+    useStore.getState().rotate(m06Id); // V-G-11 Fadenlauf-Warnung mit fix: setRotation 0
+    useStore.getState().batchSetLocked([m06Id], true);
+    const finding = useStore.getState().construction.findings.find((f) => f.ruleId === 'V-G-11')!;
+    expect(finding).toBeDefined();
+    useStore.getState().applyFindingFix(finding);
+    expect(useStore.getState().project.modules.find((m) => m.id === m06Id)!.rotation).toBe(90);
+    useStore.getState().applyAllFixes();
+    expect(useStore.getState().project.modules.find((m) => m.id === m06Id)!.rotation).toBe(90);
+  });
+
+  it('L3/L20: removeRowAction löscht keine Zeile mit gesperrtem Modul und bereinigt sonst Auswahl', () => {
+    useStore.getState().addRowAction();
+    const row2 = useStore.getState().project.rows.at(-1)!.id;
+    const modId = useStore.getState().addModule('M01', row2, 'left');
+    useStore.getState().batchSetLocked([modId], true);
+    const rowsBefore = useStore.getState().project.rows.length;
+    useStore.getState().removeRowAction(row2);
+    expect(useStore.getState().project.rows.length).toBe(rowsBefore);
+
+    useStore.getState().batchSetLocked([modId], false);
+    useStore.getState().select([modId]);
+    useStore.getState().removeRowAction(row2);
+    expect(useStore.getState().project.rows.length).toBe(rowsBefore - 1);
+    expect(useStore.getState().session.selection).toEqual([]);
+  });
+
+  it('L4: duplicate entsperrt die Kopie und wählt sie direkt aus', () => {
+    const id = useStore.getState().project.modules[0]!.id;
+    useStore.getState().batchSetLocked([id], true);
+    useStore.getState().duplicate(id);
+    const sel = useStore.getState().session.selection;
+    expect(sel.length).toBe(1);
+    expect(sel[0]).not.toBe(id);
+    const copy = useStore.getState().project.modules.find((m) => m.id === sel[0])!;
+    expect(copy.locked).toBe(false);
+  });
+
+  it('L5/L23: strenge Platzierung blockiert unzulässigen Seitenwechsel (moveToSide, batchMoveToSide, asymmetrisches swapSides)', () => {
+    useStore.getState().newProject({ force: true });
+    useStore.getState().setPar((p) => ({ ...p, base: { ...p.base, widthMm: 160 as typeof p.base.widthMm } }));
+    const rowId = useStore.getState().project.rows[0]!.id;
+    const leftId = useStore.getState().addModule('M01', rowId, 'left');
+    const rightId = useStore.getState().addModule('M01', rowId, 'right');
+    useStore.getState().setParam(leftId, 'breite', 110);
+    useStore.getState().setParam(rightId, 'breite', 110);
+    // 110 + 110 = 220 > 140 Nutzbreite -> beide auf einer Seite wären V-G-01!
+    useStore.getState().moveToSide(rightId, 'left');
+    expect(useStore.getState().project.modules.find((m) => m.id === rightId)!.side).toBe('right');
+    useStore.getState().batchMoveToSide([rightId], 'left');
+    expect(useStore.getState().project.modules.find((m) => m.id === rightId)!.side).toBe('right');
+    // Asymmetrisches swapSides: links gesperrt, rechts entsperrt -> würde beide links kollidieren lassen
+    useStore.getState().batchSetLocked([leftId], true);
+    useStore.getState().swapSides();
+    expect(useStore.getState().project.modules.find((m) => m.id === rightId)!.side).toBe('right');
+  });
+
+  it('L6/L8: undo/redo bereinigen verwaiste Auswahl; addModule öffnet Zugeklappt-Vorschau automatisch', () => {
+    useStore.getState().toggleFolded();
+    expect(useStore.getState().session.folded).toBe(true);
+    const newId = useStore.getState().addModule('M01');
+    expect(useStore.getState().session.folded).toBe(false);
+    expect(useStore.getState().session.selection).toEqual([newId]);
+    useStore.getState().undo();
+    expect(useStore.getState().session.selection).toEqual([]);
+  });
+
+  it('L13/L21: autoFitSpine ist bei leerem Projekt No-op; newProject mit Preset schützt ungespeicherte Arbeit', () => {
+    useStore.getState().newProject({ force: true });
+    const spineBefore = useStore.getState().project.base.spineWidthMm;
+    useStore.getState().autoFitSpine();
+    expect(useStore.getState().project.base.spineWidthMm).toBe(spineBefore);
+
+    useStore.getState().addModule('M01'); // dirty
+    useStore.getState().newProject({ preset: { name: 'Federmäppchen', widthMm: 220, heightMm: 120 } });
+    expect(useStore.getState().pendingDiscard?.kind).toBe('new');
+    useStore.getState().confirmPendingDiscard();
+    expect(useStore.getState().project.name).toBe('Federmäppchen');
+    expect(useStore.getState().project.base.widthMm).toBe(220);
+    expect(useStore.getState().project.base.heightMm).toBe(120);
+  });
+});
+

@@ -83,7 +83,7 @@ export function Collapsible({
   );
 }
 
-/** Zahlfeld mit Einheit und Stepper. Schreibt bei jedem gültigen Wert. */
+/** Zahlfeld mit Einheit und Stepper. Schreibt bei jedem gültigen Wert (intern stets ganzzahlige mm). */
 export function NumberField({
   label,
   value,
@@ -92,6 +92,7 @@ export function NumberField({
   max,
   step = 1,
   unit,
+  displayUnit = 'mm',
   derived,
   help,
   slider,
@@ -104,28 +105,47 @@ export function NumberField({
   max: number;
   step?: number;
   unit?: string;
+  displayUnit?: 'mm' | 'cm';
   derived?: boolean;
   help?: string;
   slider?: boolean;
   disabled?: boolean;
 }): JSX.Element {
-  const [draft, setDraft] = useState(String(Math.round(value)));
+  const isCm = unit === 'mm' && displayUnit === 'cm';
+  const shownUnit = isCm ? 'cm' : unit;
+  const fmt = (mmVal: number): string => {
+    const rounded = Math.round(mmVal);
+    if (!isCm) return String(rounded);
+    const cm = rounded / 10;
+    return cm % 1 === 0 ? String(cm) : cm.toFixed(1);
+  };
+
+  const [draft, setDraft] = useState(() => fmt(value));
   const [editing, setEditing] = useState(false);
   const inputId = useId();
 
   useEffect(() => {
-    if (!editing) setDraft(String(Math.round(value)));
-  }, [value, editing]);
+    if (!editing) setDraft(fmt(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, editing, isCm]);
+
+  const commitMm = (mmVal: number): void => {
+    if (!Number.isFinite(mmVal)) {
+      setDraft(fmt(value));
+      return;
+    }
+    const next = clamp(Math.round(mmVal), min, max);
+    setDraft(fmt(next));
+    if (next !== value && onChange) onChange(next);
+  };
 
   const commit = (raw: string): void => {
     const n = Number(raw.replace(',', '.'));
     if (!Number.isFinite(n)) {
-      setDraft(String(Math.round(value)));
+      setDraft(fmt(value));
       return;
     }
-    const next = clamp(Math.round(n), min, max);
-    setDraft(String(next));
-    if (next !== value && onChange) onChange(next);
+    commitMm(isCm ? n * 10 : n);
   };
 
   return (
@@ -143,10 +163,10 @@ export function NumberField({
         <div className={`input${derived ? ' derived' : ''}`}>
           {onChange && !disabled ? (
             <div className="stepper" style={{ order: 2 }}>
-              <button type="button" onClick={() => commit(String(value - step))} disabled={value <= min} aria-label={`${label} verkleinern`}>
+              <button type="button" onClick={() => commitMm(value - step)} disabled={value <= min} aria-label={`${label} verkleinern`}>
                 <Icon name="minus" size={11} />
               </button>
-              <button type="button" onClick={() => commit(String(value + step))} disabled={value >= max} aria-label={`${label} vergrößern`}>
+              <button type="button" onClick={() => commitMm(value + step)} disabled={value >= max} aria-label={`${label} vergrößern`}>
                 <Icon name="plus" size={11} />
               </button>
             </div>
@@ -154,11 +174,11 @@ export function NumberField({
           <input
             id={inputId}
             type="number"
-            inputMode="numeric"
+            inputMode={isCm ? 'decimal' : 'numeric'}
             value={draft}
-            min={min}
-            max={max}
-            step={step}
+            min={isCm ? min / 10 : min}
+            max={isCm ? max / 10 : max}
+            step={isCm ? step / 10 : step}
             readOnly={!onChange || disabled}
             disabled={disabled}
             aria-label={onChange && !disabled ? label : `${label} (berechnet)`}
@@ -176,15 +196,15 @@ export function NumberField({
               }
               if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                commit(String(Math.min(max, value + step)));
+                commitMm(Math.min(max, value + step));
               }
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                commit(String(Math.max(min, value - step)));
+                commitMm(Math.max(min, value - step));
               }
             }}
           />
-          {unit ? <span className="unit">{unit}</span> : null}
+          {shownUnit ? <span className="unit">{shownUnit}</span> : null}
         </div>
       </div>
       {slider && onChange && !disabled ? (
@@ -195,7 +215,7 @@ export function NumberField({
             max={max}
             step={step}
             value={value}
-            onChange={(e) => commit(e.target.value)}
+            onChange={(e) => commitMm(Number(e.target.value))}
             aria-label={`${label} Regler`}
           />
         </div>
@@ -209,18 +229,20 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  disabled,
 }: {
   label?: string;
   value: T;
   options: readonly { readonly value: T; readonly label: string }[];
   onChange: (v: T) => void;
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <div className="field">
       {label ? <span className="field-label">{label}</span> : null}
       <div className="seg" role="group" aria-label={label}>
         {options.map((o) => (
-          <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>
+          <button key={o.value} type="button" disabled={disabled} aria-pressed={value === o.value} onClick={() => onChange(o.value)}>
             {o.label}
           </button>
         ))}
@@ -233,14 +255,16 @@ export function Switch({
   label,
   checked,
   onChange,
+  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <label className="switch" style={{ marginBottom: 12 }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="switch-track" />
       <span>{label}</span>
     </label>

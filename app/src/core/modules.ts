@@ -120,8 +120,9 @@ const M01: ModuleDef = {
     },
     { key: 'saumbreite', labelKey: 'f.saumbreite', kind: 'length', min: 6, max: 25, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 70), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 70), ctx.rowHeightMm)),
+  bulkMm: () => 5,
+  width: (p) => mm(num(p, 'breite', 70)),
+  height: (p) => mm(num(p, 'hoehe', 70)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 70);
@@ -229,8 +230,9 @@ const M02: ModuleDef = {
     { key: 'sections', labelKey: 'f.faecher', kind: 'count', min: 2, max: 12, step: 1, groupKey: 'g.konstruktion' },
     { key: 'steg', labelKey: 'f.steg', kind: 'length', min: 0, max: 20, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 120), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 80), ctx.rowHeightMm)),
+  bulkMm: () => 5,
+  width: (p) => mm(num(p, 'breite', 120)),
+  height: (p) => mm(num(p, 'hoehe', 80)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 120);
@@ -345,8 +347,9 @@ const M03: ModuleDef = {
       groupKey: 'g.konstruktion',
     },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 160), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 90), ctx.rowHeightMm)),
+  bulkMm: () => 9,
+  width: (p) => mm(num(p, 'breite', 160)),
+  height: (p) => mm(num(p, 'hoehe', 90)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 160);
@@ -461,7 +464,8 @@ const M04: ModuleDef = {
     { key: 'bandbreite', labelKey: 'f.bandbreite', kind: 'length', min: 5, max: 30, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
     { key: 'zug', labelKey: 'f.zug', kind: 'length', min: 0, max: 14, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion', helpKey: 'help.zug' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 140), ctx.channelFreeMm)),
+  bulkMm: (p) => Math.min(18, Math.max(4, Math.round(num(p, 'gegenstandDicke', 10) * 0.75 + 2))),
+  width: (p) => mm(num(p, 'breite', 140)),
   height: () => mm(26),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
@@ -539,6 +543,34 @@ const M04: ModuleDef = {
         dismissible: true,
       });
     }
+    if (26 > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M04-04',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: 26, panel: Math.round(ctx.rowHeightMm) },
+        fix: { kind: 'growHeight', toMm: Math.ceil(ctx.panelHeightMm - ctx.rowHeightMm + 26) + 20 },
+        dismissible: false,
+      });
+    }
+    const objW = num(p, 'gegenstandBreite', 12);
+    const objD = num(p, 'gegenstandDicke', 10);
+    const grip = num(p, 'zug', PRACTICE.elasticGripMm);
+    const rawLoop = objW + 2 * objD - grip;
+    if (rawLoop < 6) {
+      const fix: Finding['fix'] =
+        objW + 2 * objD >= 8
+          ? { kind: 'setParam', moduleId: id, key: 'zug', value: Math.max(0, Math.round(objW + 2 * objD - 8)) }
+          : { kind: 'setParam', moduleId: id, key: 'gegenstandBreite', value: Math.max(8, Math.round(8 + grip - 2 * objD)) };
+      out.push({
+        ruleId: 'V-M04-05',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { schlaufe: Math.round(rawLoop), zug: Math.round(grip) },
+        fix,
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -579,6 +611,7 @@ const M05: ModuleDef = {
     { key: 'umfang', labelKey: 'f.umfang', kind: 'length', min: 20, max: 200, step: 1, unitKey: 'u.mm', groupKey: 'g.gegenstand', helpKey: 'help.umfang' },
     { key: 'bandbreite', labelKey: 'f.bandbreite', kind: 'length', min: 8, max: 50, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
+  bulkMm: (p) => Math.min(16, Math.max(5, Math.round(num(p, 'umfang', 70) / 8))),
   width: (p) => mm(num(p, 'anzahl', 1) * (num(p, 'bandbreite', 20) + 16) + 16),
   height: () => mm(46),
   pieces: (p, ctx) => {
@@ -642,6 +675,16 @@ const M05: ModuleDef = {
         dismissible: true,
       });
     }
+    if (46 > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M05-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: 46, panel: Math.round(ctx.rowHeightMm) },
+        fix: { kind: 'growHeight', toMm: Math.ceil(ctx.panelHeightMm - ctx.rowHeightMm + 46) + 20 },
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -673,6 +716,8 @@ const M06: ModuleDef = {
   defaults: { nadellaenge: 200, nadelstaerke: 4, paare: 1, zugabe: 14, verstaerkung: true },
   derivedWidth: true,
   derivedHeight: true,
+  grainSensitive: true,
+  bulkMm: (p) => Math.min(18, Math.round(num(p, 'nadelstaerke', 4) + (bool(p, 'verstaerkung', true) ? 4 : 2))),
   fields: [
     { key: 'nadellaenge', labelKey: 'f.nadellaenge', kind: 'length', min: 60, max: 400, step: 5, unitKey: 'u.mm', groupKey: 'g.nadel', helpKey: 'help.nadellaenge' },
     { key: 'nadelstaerke', labelKey: 'f.nadelstaerke', kind: 'length', min: 1, max: 15, step: 1, unitKey: 'u.mm', groupKey: 'g.nadel' },
@@ -817,6 +862,7 @@ const M07: ModuleDef = {
     { key: 'laenge', labelKey: 'f.lasche-laenge', kind: 'length', min: 80, max: 500, step: 5, unitKey: 'u.mm', groupKey: 'g.konstruktion', helpKey: 'help.lasche' },
     { key: 'ueberlappung', labelKey: 'f.ueberlappung', kind: 'length', min: 20, max: 120, step: 5, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
+  bulkMm: () => 3,
   width: (p) => mm(num(p, 'bandbreite', 25) + 10),
   height: (p) => mm(Math.min(90, num(p, 'laenge', 220) / 2)),
   pieces: (p, ctx) => {
@@ -854,26 +900,63 @@ const M07: ModuleDef = {
     { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.make-strap', values: { anzahl: Math.round(num(p, 'anzahl', 1)) } },
     { kind: 'insert-strap', moduleId: id, dependsOn: [], titleKey: 'op.attach-strap', values: { ueberlappung: Math.round(num(p, 'ueberlappung', 40)) } },
   ],
-  validate: (p, _ctx, id) => {
+  validate: (p, ctx, id) => {
     const out: Finding[] = [];
-    if (num(p, 'ueberlappung', 40) < 20) {
+    const bw = num(p, 'bandbreite', 25);
+    const laenge = num(p, 'laenge', 220);
+    const ueberlappung = num(p, 'ueberlappung', 40);
+    const w = M07.width(p, ctx);
+    const h = M07.height(p, ctx);
+    if (ueberlappung < 20) {
       out.push({
         ruleId: 'V-M07-01',
         severity: 'error',
         subject: { kind: 'module', id },
-        values: { ueberlappung: Math.round(num(p, 'ueberlappung', 0)) },
+        values: { ueberlappung: Math.round(ueberlappung) },
         fix: { kind: 'setParam', moduleId: id, key: 'ueberlappung', value: 40 },
         dismissible: false,
       });
     }
-    if (num(p, 'bandbreite', 25) < 15) {
+    if (bw < 15) {
       out.push({
         ruleId: 'V-M07-02',
         severity: 'warn',
         subject: { kind: 'module', id },
-        values: { breite: Math.round(num(p, 'bandbreite', 0)) },
+        values: { breite: Math.round(bw) },
         fix: { kind: 'setParam', moduleId: id, key: 'bandbreite', value: 25 },
         dismissible: true,
+      });
+    }
+    if (w > ctx.channelFreeMm) {
+      out.push({
+        ruleId: 'V-M07-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
+        fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M07-04',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: { kind: 'growHeight', toMm: Math.ceil(ctx.panelHeightMm - ctx.rowHeightMm + h) + 20 },
+        dismissible: false,
+      });
+    }
+    const spine = ctx.spineWidthMm ?? 0;
+    const minReach = spine + ueberlappung;
+    if (spine > 0 && laenge < minReach) {
+      out.push({
+        ruleId: 'V-M07-05',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { laenge: Math.round(laenge), benoetigt: Math.round(minReach), bund: Math.round(spine) },
+        fix: { kind: 'setParam', moduleId: id, key: 'laenge', value: Math.min(500, Math.round(minReach)) },
+        dismissible: false,
       });
     }
     return out;
@@ -904,6 +987,7 @@ const M08: ModuleDef = {
     { key: 'laschenLaenge', labelKey: 'f.laschen-laenge', kind: 'length', min: 40, max: 200, step: 5, unitKey: 'u.mm', groupKey: 'g.masse' },
     { key: 'laschenBreite', labelKey: 'f.laschen-breite', kind: 'length', min: 12, max: 60, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
+  bulkMm: () => 4,
   width: (p) => mm(num(p, 'laschenBreite', 22) + 10),
   height: (p) => mm(num(p, 'laschenLaenge', 90)),
   pieces: (p, ctx) => {
@@ -937,10 +1021,15 @@ const M08: ModuleDef = {
     { kind: 'insert-strap', moduleId: id, dependsOn: [], titleKey: 'op.attach-button-tab', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
     { kind: 'attach-button', moduleId: id, dependsOn: [], titleKey: 'op.attach-button', values: { durchmesser: Math.round(num(p, 'knopfDurchmesser', 18)) } },
   ],
-  validate: (p, _ctx, id) => {
+  validate: (p, ctx, id) => {
     const out: Finding[] = [];
     const d = num(p, 'knopfDurchmesser', 18);
     const lw = num(p, 'laschenBreite', 22);
+    const ll = num(p, 'laschenLaenge', 90);
+    const w = M08.width(p, ctx);
+    const h = M08.height(p, ctx);
+    const spine = ctx.spineWidthMm ?? 0;
+    const minReach = spine + d + PRACTICE.buttonTabMarginMm;
     if (lw < d + 6) {
       out.push({
         ruleId: 'V-M08-01',
@@ -948,6 +1037,36 @@ const M08: ModuleDef = {
         subject: { kind: 'module', id },
         values: { lasche: Math.round(lw), knopf: Math.round(d) },
         fix: { kind: 'setParam', moduleId: id, key: 'laschenBreite', value: Math.round(d + 8) },
+        dismissible: false,
+      });
+    }
+    if (w > ctx.channelFreeMm) {
+      out.push({
+        ruleId: 'V-M08-02',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
+        fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M08-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'laschenLaenge', h, Math.max(40, spine > 0 ? minReach : 40)),
+        dismissible: false,
+      });
+    }
+    if (spine > 0 && ll < minReach) {
+      out.push({
+        ruleId: 'V-M08-04',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { laenge: Math.round(ll), benoetigt: Math.round(minReach), bund: Math.round(spine) },
+        fix: { kind: 'setParam', moduleId: id, key: 'laschenLaenge', value: Math.min(200, Math.round(minReach)) },
         dismissible: false,
       });
     }
@@ -981,8 +1100,9 @@ const M09: ModuleDef = {
     { key: 'ringe', labelKey: 'f.ringe', kind: 'count', min: 1, max: 14, step: 1, groupKey: 'g.konstruktion' },
     { key: 'polsterung', labelKey: 'f.polsterung', kind: 'length', min: 0, max: 15, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 110), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 55), ctx.rowHeightMm)),
+  bulkMm: (p) => Math.min(18, Math.max(5, Math.round(num(p, 'polsterung', 6) + 5))),
+  width: (p) => mm(num(p, 'breite', 110)),
+  height: (p) => mm(num(p, 'hoehe', 55)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 110);
@@ -1070,8 +1190,9 @@ const M10: ModuleDef = {
     { key: 'paare', labelKey: 'f.paare', kind: 'count', min: 1, max: 14, step: 1, groupKey: 'g.konstruktion' },
     { key: 'lochAbstand', labelKey: 'f.lochabstand', kind: 'length', min: 5, max: 30, step: 1, unitKey: 'u.mm', groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 110), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 45), ctx.rowHeightMm)),
+  bulkMm: () => 6,
+  width: (p) => mm(num(p, 'breite', 110)),
+  height: (p) => mm(num(p, 'hoehe', 45)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 110);
@@ -1161,8 +1282,9 @@ const M11: ModuleDef = {
     { key: 'hoehe', labelKey: 'f.hoehe', kind: 'length', min: 60, max: 300, step: 1, unitKey: 'u.mm', groupKey: 'g.masse' },
     { key: 'haken', labelKey: 'f.haken', kind: 'count', min: 1, max: 9, step: 1, groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 130), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 120), ctx.rowHeightMm)),
+  bulkMm: () => 6,
+  width: (p) => mm(num(p, 'breite', 130)),
+  height: (p) => mm(num(p, 'hoehe', 120)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 130);
@@ -1264,8 +1386,9 @@ const M12: ModuleDef = {
     { key: 'sections', labelKey: 'f.faecher', kind: 'count', min: 1, max: 6, step: 1, groupKey: 'g.konstruktion' },
     { key: 'schraeg', labelKey: 'f.schraege', kind: 'bool', groupKey: 'g.konstruktion', helpKey: 'help.schraege' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 90), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 120), ctx.rowHeightMm)),
+  bulkMm: () => 10,
+  width: (p) => mm(num(p, 'breite', 90)),
+  height: (p) => mm(num(p, 'hoehe', 120)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 90);
@@ -1366,7 +1489,8 @@ const M13: ModuleDef = {
     { key: 'hoehe', labelKey: 'f.hoehe', kind: 'length', min: 30, max: 260, step: 1, unitKey: 'u.mm', groupKey: 'g.masse' },
     { key: 'knopf', labelKey: 'f.mit-knopf', kind: 'bool', groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 160), ctx.channelFreeMm)),
+  bulkMm: () => 4,
+  width: (p) => mm(num(p, 'breite', 160)),
   height: (p) => mm(num(p, 'hoehe', 90)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
@@ -1407,6 +1531,7 @@ const M13: ModuleDef = {
   validate: (p, ctx, id) => {
     const out: Finding[] = [];
     const w = num(p, 'breite', 160);
+    const h = num(p, 'hoehe', 90);
     if (w > ctx.channelFreeMm) {
       out.push({
         ruleId: 'V-M13-01',
@@ -1414,6 +1539,16 @@ const M13: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M13-02',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 30),
         dismissible: false,
       });
     }
@@ -1446,8 +1581,9 @@ const M14: ModuleDef = {
     { key: 'hoehe', labelKey: 'f.hoehe', kind: 'length', min: 30, max: 260, step: 1, unitKey: 'u.mm', groupKey: 'g.masse' },
     { key: 'mitZug', labelKey: 'f.mit-zug', kind: 'bool', groupKey: 'g.konstruktion' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 110), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 90), ctx.rowHeightMm)),
+  bulkMm: (p) => (bool(p, 'mitZug', true) ? 12 : 8),
+  width: (p) => mm(num(p, 'breite', 110)),
+  height: (p) => mm(num(p, 'hoehe', 90)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 110);
@@ -1523,8 +1659,9 @@ const M15: ModuleDef = {
     { key: 'breite', labelKey: 'f.breite', kind: 'length', min: 30, max: 120, step: 1, unitKey: 'u.mm', groupKey: 'g.masse' },
     { key: 'hoehe', labelKey: 'f.hoehe', kind: 'length', min: 25, max: 100, step: 1, unitKey: 'u.mm', groupKey: 'g.masse' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 60), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'hoehe', 40), ctx.rowHeightMm)),
+  bulkMm: () => 10,
+  width: (p) => mm(num(p, 'breite', 60)),
+  height: (p) => mm(num(p, 'hoehe', 40)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     return [base(nz, 'massband-fach', 'piece.massband-fach', num(p, 'breite', 60) + 2 * nz, num(p, 'hoehe', 40) + 2 * nz, 'fabric', { noteKey: 'note.massband' })];
@@ -1576,8 +1713,9 @@ const M16: ModuleDef = {
     { key: 'laenge', labelKey: 'f.scheren-laenge', kind: 'length', min: 80, max: 260, step: 5, unitKey: 'u.mm', groupKey: 'g.masse' },
     { key: 'breite', labelKey: 'f.breite', kind: 'length', min: 25, max: 110, step: 1, unitKey: 'u.mm', groupKey: 'g.masse' },
   ],
-  width: (p, ctx) => mm(Math.min(num(p, 'breite', 60), ctx.channelFreeMm)),
-  height: (p, ctx) => mm(Math.min(num(p, 'laenge', 180), ctx.rowHeightMm)),
+  bulkMm: () => 9,
+  width: (p) => mm(num(p, 'breite', 60)),
+  height: (p) => mm(num(p, 'laenge', 180)),
   pieces: (p, ctx) => {
     const nz = ctx.seamAllowanceMm;
     return [

@@ -105,6 +105,8 @@ export type FindSubject =
   | { readonly kind: 'panel' }
   | { readonly kind: 'project' };
 
+export type Side = 'left' | 'right';
+
 export type FixKind =
   | { readonly kind: 'widenBase'; readonly toMm: number }
   | { readonly kind: 'growHeight'; readonly toMm: number }
@@ -112,7 +114,10 @@ export type FixKind =
   | { readonly kind: 'removeModule'; readonly moduleId: string }
   | { readonly kind: 'addModule'; readonly typeId: string }
   | { readonly kind: 'setFabricWidth'; readonly toMm: number }
-  | { readonly kind: 'setCornerRadius'; readonly toMm: number };
+  | { readonly kind: 'setCornerRadius'; readonly toMm: number }
+  | { readonly kind: 'setSpineWidth'; readonly toMm: number }
+  | { readonly kind: 'setRotation'; readonly moduleId: string; readonly rotation: 0 | 90 | 180 | 270 }
+  | { readonly kind: 'relocateModule'; readonly moduleId: string; readonly side: Side; readonly rowId: string; readonly index: number };
 
 export interface Finding {
   readonly ruleId: string;
@@ -179,6 +184,7 @@ export interface LayoutContext {
   readonly rowHeightMm: Mm;
   readonly seamAllowanceMm: Mm;
   readonly fabricWidthMm: Mm;
+  readonly spineWidthMm?: Mm;
 }
 
 /** Zeichenprimitive in LOKALEN Modulkoordinaten (0..w, 0..h), mm. */
@@ -201,6 +207,10 @@ export interface ModuleDef {
   readonly derivedHeight?: boolean;
   /** Optional: Breite folgt aus Parameter. */
   readonly derivedWidth?: boolean;
+  /** true = Fadenlaufkritisch (Drehung 90°/270° verstößt gegen V-G-11). */
+  readonly grainSensitive?: boolean;
+  /** Geschätzte gefaltete Auftragsdicke in mm (für Bund-Kapazitätsprüfung V-G-16). */
+  bulkMm(p: Params): number;
   width(p: Params, ctx: LayoutContext): Mm;
   height(p: Params, ctx: LayoutContext): Mm;
   pieces(p: Params, ctx: LayoutContext, moduleId: string): readonly PieceSpec[];

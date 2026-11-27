@@ -13,7 +13,7 @@ export type IconName =
   | 'undo' | 'redo' | 'download' | 'upload' | 'printer' | 'image' | 'file' | 'trash' | 'copy'
   | 'lock' | 'unlock' | 'grid' | 'magnet' | 'zoomIn' | 'zoomOut' | 'fit' | 'rotate' | 'menu'
   | 'alert' | 'info' | 'error' | 'layers' | 'scissors' | 'ruler' | 'spool' | 'needle' | 'list'
-  | 'settings' | 'folder' | 'sparkle' | 'arrowRight' | 'drag' | 'pocket' | 'divided' | 'zip'
+  | 'settings' | 'folder' | 'sparkle' | 'arrowRight' | 'arrowLeft' | 'arrowUp' | 'arrowDown' | 'swap' | 'book' | 'help' | 'reset' | 'shield' | 'award' | 'drag' | 'pocket' | 'divided' | 'zip'
   | 'loops' | 'strap' | 'channel' | 'button' | 'ring' | 'earring' | 'necklace' | 'brush' | 'flap'
   | 'pouch' | 'tape' | 'scissorsTool' | 'sliders' | 'play' | 'save' | 'eye' | 'eyeOff' | 'pencil';
 
@@ -57,6 +57,15 @@ const P: Record<IconName, JSX.Element> = {
   folder: <path d="M2 4.5A1 1 0 013 3.5h3l1.2 1.5H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1z" />,
   sparkle: <><path d="M8 2l1.3 3.4L12.5 6.6 9.3 8 8 11.5 6.7 8 3.5 6.6 6.7 5.4z" /><path d="M12.5 10.5l.6 1.4 1.4.6-1.5.6-.5 1.4-.6-1.4-1.4-.6 1.4-.6z" /></>,
   arrowRight: <><path d="M3 8h10" /><path d="M9.5 4.5L13 8l-3.5 3.5" /></>,
+  arrowLeft: <><path d="M13 8H3" /><path d="M6.5 4.5L3 8l3.5 3.5" /></>,
+  arrowUp: <><path d="M8 13V3" /><path d="M4.5 6.5L8 3l3.5 3.5" /></>,
+  arrowDown: <><path d="M8 3v10" /><path d="M4.5 9.5L8 13l3.5-3.5" /></>,
+  swap: <><path d="M3 5.5h10M10.5 3L13 5.5 10.5 8" /><path d="M13 10.5H3M5.5 8L3 10.5 5.5 13" /></>,
+  book: <><path d="M2.5 3.5h4.5a1.5 1.5 0 011.5 1.5v8a1.5 1.5 0 00-1.5-1.5H2.5z" /><path d="M13.5 3.5H9A1.5 1.5 0 007.5 5v8A1.5 1.5 0 019 11.5h4.5z" /></>,
+  help: <><circle cx="8" cy="8" r="6" /><path d="M6.2 6.3a1.9 1.9 0 013.6.7c0 1.2-1.8 1.5-1.8 2.6" /><circle cx="8" cy="11.7" r=".6" fill="currentColor" stroke="none" /></>,
+  reset: <><path d="M3.5 8a4.5 4.5 0 101.2-3.1" /><path d="M3.5 3v2.6h2.6" /></>,
+  shield: <path d="M8 2.2l5 2v3.6c0 3.2-2.2 5.4-5 6.4-2.8-1-5-3.2-5-6.4V4.2l5-2z" />,
+  award: <><circle cx="8" cy="6.2" r="3.6" /><path d="M6 9.5L5 14l3-1.6L11 14l-1-4.5" /></>,
   drag: <><circle cx="6" cy="4" r="1" /><circle cx="10" cy="4" r="1" /><circle cx="6" cy="8" r="1" /><circle cx="10" cy="8" r="1" /><circle cx="6" cy="12" r="1" /><circle cx="10" cy="12" r="1" /></>,
   pocket: <><path d="M2.5 4.5h11v7h-11z" /><path d="M2.5 7h11" /></>,
   divided: <><path d="M2.5 4.5h11v7h-11z" /><path d="M2.5 7h11M6.2 7v4.5M9.8 7v4.5" /></>,

@@ -22,6 +22,14 @@ const PREVIEW_CTX: LayoutContext = {
   rowHeightMm: mm(280),
   seamAllowanceMm: mm(10),
   fabricWidthMm: mm(1400),
+  spineWidthMm: mm(32),
+};
+
+/** Laufender Bibliothek-Drag (Browser verbergen dataTransfer während dragover). */
+let activeDragModule: ModuleTypeId | null = null;
+export const getDraggedLibraryModule = (): ModuleTypeId | null => activeDragModule;
+export const clearDraggedLibraryModule = (): void => {
+  activeDragModule = null;
 };
 
 export function Library(): JSX.Element {
@@ -43,9 +51,14 @@ export function Library(): JSX.Element {
   }, [q, cat]);
 
   const onDragStart = (e: DragEvent<HTMLDivElement>, id: ModuleTypeId): void => {
+    activeDragModule = id;
     e.dataTransfer.setData('application/x-module', id);
     e.dataTransfer.setData('text/plain', id);
     e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const onDragEnd = (): void => {
+    activeDragModule = null;
   };
 
   const add = (id: ModuleTypeId): void => {
@@ -67,9 +80,9 @@ export function Library(): JSX.Element {
         </div>
       </div>
       <div className="lib-cats" role="tablist" aria-label={t('lib.catLabel')}>
-        <button className="lib-cat" role="tab" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>{t('lib.all')}</button>
+        <button className="lib-cat" role="tab" aria-selected={cat === 'all'} onClick={() => setCat('all')}>{t('lib.all')}</button>
         {CATEGORIES.map((c) => (
-          <button key={c} className="lib-cat" role="tab" aria-pressed={cat === c} onClick={() => setCat(c)}>{t(`lib.cat.${c}`)}</button>
+          <button key={c} className="lib-cat" role="tab" aria-selected={cat === c} onClick={() => setCat(c)}>{t(`lib.cat.${c}`)}</button>
         ))}
       </div>
       <div className="pane-body">
@@ -83,6 +96,7 @@ export function Library(): JSX.Element {
                 className="lib-item"
                 draggable
                 onDragStart={(e) => onDragStart(e, m.id)}
+                onDragEnd={onDragEnd}
                 onClick={() => add(m.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {

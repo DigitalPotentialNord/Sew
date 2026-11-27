@@ -114,7 +114,7 @@ describe('Dynamische Schlüssel-Familien (Engine-Ausgabe)', () => {
 
 describe('Kern-Regelknoten (Konstruktionsregeln)', () => {
   // ruleId-Literale im Kern → beide Anzeige-Keys müssen existieren.
-  const coreFiles = ['construction.ts', 'modules.ts', 'fixes.ts'];
+  const coreFiles = ['construction.ts', 'modules.ts', 'fixes.ts', 'evaluation.ts', 'placement.ts'];
   const ids = new Set<string>();
   for (const name of coreFiles) {
     const src = readFileSync(join(__dirname, '..', 'core', name), 'utf8');
@@ -122,7 +122,7 @@ describe('Kern-Regelknoten (Konstruktionsregeln)', () => {
   }
 
   it('jede im Kern referenzierte ruleId hat title + detail', () => {
-    expect(ids.size).toBeGreaterThan(10); // die V-G-Regeln + V-M*-Regeln
+    expect(ids.size).toBeGreaterThan(20); // alle V-G-Regeln + V-M*-Regeln
     const missing = [...ids].flatMap((id) =>
       [`rule.${id}.title`, `rule.${id}.detail`].filter((k) => !has(k)),
     );
@@ -135,6 +135,19 @@ describe('Kern-Regelknoten (Konstruktionsregeln)', () => {
     expect(kinds.length).toBeGreaterThan(0);
     const missing = kinds.filter((k) => !has(`fix.${k}`)).map((k) => `fix.${k}`);
     expect(missing).toEqual([]);
+  });
+
+  it('alle Bewertungs- und Platzierungs-Keys aus evaluation.ts / placement.ts existieren', () => {
+    const evalSrc = readFileSync(join(__dirname, '..', 'core', 'evaluation.ts'), 'utf8');
+    const placeSrc = readFileSync(join(__dirname, '..', 'core', 'placement.ts'), 'utf8');
+    const keySet = new Set<string>();
+    for (const src of [evalSrc, placeSrc]) {
+      for (const m of src.matchAll(/'((?:eval|place)\.[a-zA-Z0-9._-]+)'/g)) keySet.add(m[1]!);
+    }
+    for (const v of ['approved', 'caution', 'blocked']) keySet.add(`eval.verdict.${v}`);
+    expect(keySet.size).toBeGreaterThan(20);
+    const missing = [...keySet].filter((k) => !has(k));
+    expect(missing, `fehlende Keys: ${missing.join(', ')}`).toEqual([]);
   });
 
   it('Phasen, Materialarten und Einheiten existieren', () => {

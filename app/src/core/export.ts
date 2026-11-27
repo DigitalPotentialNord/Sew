@@ -5,6 +5,25 @@
 import { roundedRectPath, type Mm, type Rect } from './geometry';
 import type { ComputedPiece, Construction } from './construction';
 
+export interface ExportEligibility {
+  readonly ok: boolean;
+  readonly errorCount: number;
+  readonly warnCount: number;
+  readonly score: number;
+  readonly grade: Construction['evaluation']['grade'];
+}
+
+/** Zentrale, verbindliche Export-Freigabe — niemals mit Fehlern exportieren. */
+export function canExport(c: Construction): ExportEligibility {
+  return {
+    ok: c.metrics.errorCount === 0 && c.evaluation.verdict !== 'blocked',
+    errorCount: c.metrics.errorCount,
+    warnCount: c.metrics.warnCount,
+    score: c.evaluation.score,
+    grade: c.evaluation.grade,
+  };
+}
+
 // ─── SVG (1 Einheit = 1 mm) ──────────────────────────────────────────────────
 const STYLE: Record<string, string> = {
   cut: 'fill="none" stroke="#111" stroke-width="0.4"',

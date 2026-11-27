@@ -36,7 +36,6 @@ export function StartScreen(): JSX.Element {
   const setStartOpen = useStore((s) => s.setStartOpen);
   const loadTemplate = useStore((s) => s.loadTemplate);
   const newProject = useStore((s) => s.newProject);
-  const setPar = useStore((s) => s.setPar);
   const toast = useStore((s) => s.toast);
 
   const [type, setType] = useState<OrgType | null>(null);
@@ -67,16 +66,14 @@ export function StartScreen(): JSX.Element {
     }
     const method: How = how ?? (canTemplate ? 'template' : 'blank');
     if (method === 'template' && typeDef.template) {
-      loadTemplate(typeDef.template, { force: true });
+      // Kein `force: true`: ungespeicherte Änderungen beim Wiederöffnen werden sauber geschützt.
+      loadTemplate(typeDef.template);
     } else {
-      newProject({ force: true });
       const baseW = method === 'custom' ? readSize(wDraft, LIMITS.baseWidthMm.min, LIMITS.baseWidthMm.max, 240) : typeDef.base!.w;
       const baseH = method === 'custom' ? readSize(hDraft, LIMITS.baseHeightMm.min, LIMITS.baseHeightMm.max, 200) : typeDef.base!.h;
-      setPar((p) => ({
-        ...p,
-        name: t(typeDef.labelKey),
-        base: { ...p.base, widthMm: baseW, heightMm: baseH },
-      }), { undoable: false });
+      newProject({
+        preset: { name: t(typeDef.labelKey), widthMm: baseW, heightMm: baseH },
+      });
     }
     setStartOpen(false);
   };
@@ -84,7 +81,15 @@ export function StartScreen(): JSX.Element {
   const skip = (): void => setStartOpen(false);
 
   return (
-    <div className="start-overlay" role="dialog" aria-modal="true" aria-label={t('start.title')}>
+    <div
+      className="start-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('start.title')}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) skip();
+      }}
+    >
       <div className="start-card">
         <div className="start-eyebrow">{t('app.tagline')}</div>
         <h1 className="start-title">{t('start.title')}</h1>

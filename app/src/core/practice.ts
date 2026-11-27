@@ -31,6 +31,12 @@ export const PRACTICE = {
   minZipMm: 80,
   /** Toleranz für die Maßhaltigkeit im Druck (± mm bei 50 mm). */
   printToleranceMm: 0.5,
+  /** Gefaltete Grunddicke der Panel-Lagen (Außenstoff + Futter + Einlage, doppelt im Falz). [H] */
+  panelFoldBulkMm: 4,
+  /** Sicherheitsreserve vertikal im Panel bevor V-G-17 warnt. [H] */
+  minVerticalReserveMm: 4,
+  /** Mindestüberstand einer Knopflasche über Bund + Knopf. [H] */
+  buttonTabMarginMm: 10,
 } as const;
 
 export const LIMITS = {
@@ -39,7 +45,10 @@ export const LIMITS = {
   spineWidthMm: { min: 0, max: 90 },
   cornerRadiusMm: { min: 0, max: 60 },
   fabricWidthMm: { min: 400, max: 2000 },
+  seamAllowanceMm: { min: 4, max: 20 },
+  maxRows: 8,
   maxModulesPerChannel: 24,
+  maxClosures: 2,
   channelFillWarnPct: 98,
   channelFillInfoPct: 40,
   /** Ziel-Auslastung für den V-G-08-Verbreiterungs-Fix (≤ 95 % nach Anwendung). */
