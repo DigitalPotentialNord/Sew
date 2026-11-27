@@ -1,0 +1,104 @@
+# Wächter für den Branch-Schutz selbst.
+#
+# Hintergrund: Die Pflicht-Check-Namen im Ruleset "Protect main" sind die
+# Job-Namen aus ci.yml. Wird dort ein Job umbenannt oder ein Gate-Schritt
+# entfernt (z. B. das Bundle-Budget), bliebe das Ruleset formal erfüllt,
+# obwohl eine Prüfung verschwunden ist. Dieser Workflow macht beides sichtbar:
+#
+#   1. die Prüflogik des Ruleset-Skripts (Selbsttest, ohne GitHub-Rechte)
+#   2. die Gate-Schritte in ci.yml (Typecheck, Lint, Tests, Build, Budget, E2E)
+#   3. den Live-Zustand des Rulesets, sofern es bereits angewendet wurde
+#
+# Bewusst NICHT als Pflicht-Check im Ruleset eingetragen: Der Check-Name
+# existiert erst, nachdem dieser Workflow auf main gemerged ist; als Pflicht
+# eingetragen würde er den ersten Merge blockieren. Nach dem Merge kann er
+# mit einer Zeile in .github/rulesets/protect-main.json zu den Pflicht-Checks
+# hinzugefügt werden (siehe docs/engineering/branch-protection.md §7).
+name: Branch-Schutz-Wächter
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Ruleset & Gate-Integrität
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (Pinned)
+        with:
+          persist-credentials: false
+
+      - name: Prüflogik selbst testen (Soll-Zustand + 17 Abweichungen)
+        run: ./.github/rulesets/selftest.sh
+
+      - name: Soll-Datei strukturell prüfen
+        run: |
+          set -euo pipefail
+          f=.github/rulesets/protect-main.json
+          jq -e . "$f" >/dev/null
+          test "$(jq -r .enforcement "$f")" = "active"
+          test "$(jq -c '.conditions.ref_name.include' "$f")" = '["refs/heads/main"]'
+          test "$(jq -c '.conditions.ref_name.exclude' "$f")" = '[]'
+          test "$(jq -c '.bypass_actors | map("\(.actor_type):\(.actor_id)")' "$f")" = '["RepositoryRole:5"]'
+          test "$(jq -c '.rules[] | select(.type=="pull_request") | .parameters.required_approving_review_count' "$f")" = "0"
+          test "$(jq -c '.rules[] | select(.type=="pull_request") | .parameters.allowed_merge_methods' "$f")" = '["squash"]'
+          echo "Soll-Datei entspricht der dokumentierten Konfiguration."
+
+      - name: Gate-Schritte in ci.yml unverändert vorhanden
+        run: |
+          set -euo pipefail
+          f=.github/workflows/ci.yml
+          fail=0
+          # Jedes Gate muss als Schritt existieren. Ein entfernter oder
+          # abgeschwächter Schritt wird hier rot, bevor er unbemerkt bleibt.
+          for step in \
+            "npx tsc --noEmit" \
+            "npm run lint" \
+            "npm test" \
+            "npm run build" \
+            "npm run size" \
+            "npx playwright test"
+          do
+            if grep -qF -- "$step" "$f"; then
+              echo "ok      Schritt vorhanden: $step"
+            else
+              echo "::error file=.github/workflows/ci.yml::Gate-Schritt fehlt: $step"
+              fail=1
+            fi
+          done
+          # Job-Namen sind die Pflicht-Check-Namen im Ruleset.
+          while IFS= read -r ctx; do
+            if grep -qF -- "name: $ctx" "$f"; then
+              echo "ok      Job-Name vorhanden: $ctx"
+            else
+              echo "::error file=.github/workflows/ci.yml::Job '$ctx' fehlt — Pflicht-Check im Ruleset würde nie erfüllt"
+              fail=1
+            fi
+          done < <(jq -r '.rules[] | select(.type=="required_status_checks")
+                          | .parameters.required_status_checks[].context' \
+                   .github/rulesets/protect-main.json)
+          exit "$fail"
+
+      - name: Live-Zustand des Rulesets prüfen (nur wenn vorhanden)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Solange das Ruleset noch nicht angewendet wurde, ist das kein
+          # Fehler — es wird ausdrücklich darauf hingewiesen.
+          if [ "$(gh api "repos/${{ github.repository }}/rulesets" --jq 'length' 2>/dev/null || echo 0)" = "0" ]; then
+            echo "::notice::Ruleset 'Protect main' ist noch nicht angewendet. Anwenden mit .github/rulesets/apply-protect-main.sh (benötigt Administration: write)."
+            exit 0
+          fi
+          ./.github/rulesets/apply-protect-main.sh --verify

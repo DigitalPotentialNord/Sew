@@ -12,6 +12,13 @@ Der Soll-Zustand liegt als maschinenlesbare Datei im Repository:
 | --- | --- |
 | [`.github/rulesets/protect-main.json`](../../.github/rulesets/protect-main.json) | Soll-Zustand des Rulesets `Protect main` (versioniert, reviewbar) |
 | [`.github/rulesets/apply-protect-main.sh`](../../.github/rulesets/apply-protect-main.sh) | wendet ihn an (`apply`) bzw. prüft nur (`--verify`), idempotent |
+| [`.github/rulesets/selftest.sh`](../../.github/rulesets/selftest.sh) | testet die Prüflogik ohne GitHub: Soll-Zustand + 17 gezielt kaputte Zustände |
+| [`.github/workflows/guard-branch-protection.yml`](../../.github/workflows/guard-branch-protection.yml) | Wächter im CI: Ruleset-Prüfung, Gate-Schritte in `ci.yml`, Live-Abgleich |
+
+Exit-Codes des Skripts: `0` = Soll-Zustand erreicht, `1` = Abweichungen
+gefunden, `2` = Vorbedingung verletzt (kein Ruleset, ungültige Soll-Datei,
+fehlende Berechtigung). Ein fehlendes Ruleset ist damit **kein** stiller
+Erfolg.
 
 ---
 
@@ -161,6 +168,17 @@ Das Skript ist idempotent: existiert das Ruleset, wird es aktualisiert,
 sonst angelegt. Danach prüft es den Live-Zustand gegen den Soll-Zustand und
 endet bei jeder Abweichung mit Exit-Code 1.
 
+Bevor irgendetwas geschrieben wird, validiert das Skript die Soll-Datei selbst
+(aktiv, nur `main`, alle vier Regeln vorhanden, Bypass ausschließlich
+`RepositoryRole 5`). Eine versehentlich abgeschwächte Soll-Datei kann damit
+kein schwächeres Ruleset anwenden.
+
+Prüflogik ohne GitHub testen:
+
+```bash
+./.github/rulesets/selftest.sh   # 24 Prüfungen, läuft gegen einen Stub
+```
+
 Repository-Einstellungen (Squash/Merge/Rebase) separat:
 
 ```bash
@@ -211,12 +229,33 @@ Es prüft exakt diese Punkte:
 | 8 | Admin-Bypass korrekt? | ausschließlich `RepositoryRole 5` |
 | 9 | Nur Squash erlaubt? | `allowed_merge_methods == ["squash"]` + Repo-Einstellungen |
 | 10 | Reguläre PRs weiter mergebar? | siehe §5 |
+| 11 | Drift: existieren die Pflicht-Jobs noch in `ci.yml`? | §4.1 |
 
 Zusätzlich jederzeit ohne Token lesbar:
 
 ```bash
 gh api repos/DigitalPotentialNord/Sew/rules/branches/main
 ```
+
+### 4.1 Wächter gegen stilles Abschwächen
+
+Der Schutz wäre wertlos, wenn er unbemerkt ausgehöhlt werden könnte. Drei
+Szenarien sind denkbar — alle drei werden abgefangen:
+
+| Szenario | Was passiert | Auffangnetz |
+| --- | --- | --- |
+| Jemand entfernt `npm run size` (Bundle-Budget) aus `ci.yml` | Der Job `Typecheck · Lint · Test · Build` bleibt grün — das Ruleset merkt nichts | `guard-branch-protection.yml` prüft die sechs Gate-Schritte auf Existenz |
+| Ein Job in `ci.yml` wird umbenannt | Der Pflicht-Check würde nie wieder erfüllt → jeder PR dauerhaft blockiert | Wächter vergleicht die Job-Namen mit den Pflicht-Check-Namen |
+| Das Ruleset wird im UI abgeschwächt (Regel aus, Bypass erweitert) | CI bliebe grün | `--verify` im Wächter vergleicht den Live-Zustand, sobald das Ruleset existiert |
+
+Der Wächter läuft bei jedem Pull Request und auf `main`. Seine Prüflogik ist
+mit `selftest.sh` selbst getestet — inklusive der Gegenprobe, dass jede der 17
+Abweichungen wirklich erkannt wird.
+
+**Bewusst nicht als Pflicht-Check eingetragen:** Der Check-Name
+`Ruleset & Gate-Integrität` existiert erst, nachdem der Workflow auf `main`
+liegt; als Pflicht eingetragen würde er den ersten Merge dieses PRs selbst
+blockieren. Nach dem Merge ist das eine Zeile in `protect-main.json` — siehe §7.
 
 ---
 
@@ -248,11 +287,28 @@ geschlossen) werden müssen. Alle übrigen offenen PRs sind grün.
 
 ## 6. Was hier bewusst nicht geändert wurde
 
-- **Keine** Workflow-Änderung: `ci.yml` löst bereits bei jedem PR aus, alle
-  relevanten Prüfungen laufen. Es war kein separater Workflow-PR nötig, um die
-  Checks zuverlässig auszulösen.
+- **Keine** Änderung an `ci.yml`: Der Workflow löst bereits bei jedem PR aus,
+  alle relevanten Prüfungen laufen. Es war kein separater Workflow-PR nötig, um
+  die Checks zuverlässig auszulösen. Der neue
+  `guard-branch-protection.yml` ist ein **zusätzlicher** Wächter und greift
+  nicht in Build oder Tests ein.
 - **Keine** Änderung an Tests, keine abgeschwächten oder übersprungenen Prüfungen.
 - **Keine** Änderung am Quellcode in `app/`.
 - **Keine** zusätzlichen Regeln (Signaturen, Linear History, Merge Queue,
   Pflicht-Reviewer, Branch-Namensmuster), die den Ablauf ohne Nutzen bremsen.
 - `pages.yml` bleibt unverändert aktiv (Deploy nach `main`-Merge).
+
+---
+
+## 7. Optionaler nächster Schritt
+
+Nachdem `guard-branch-protection.yml` auf `main` liegt, kann sein Check-Name
+zusätzlich Pflicht werden. Dazu in `.github/rulesets/protect-main.json`:
+
+```json
+{ "context": "Ruleset & Gate-Integrität", "integration_id": 15368 }
+```
+
+in `required_status_checks` ergänzen, danach `apply-protect-main.sh` erneut
+ausführen. Ein Eintrag mehr oder weniger ist der einzige Unterschied; der
+Selbsttest deckt beide Varianten ab.
