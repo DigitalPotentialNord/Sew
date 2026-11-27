@@ -41,12 +41,23 @@ export function chooseContextBarPlacement(
   const left = Math.max(CONTEXT_BAR_MIN, Math.min(wrapWidth - CONTEXT_BAR_W - CONTEXT_BAR_MIN, center - CONTEXT_BAR_W / 2));
   const aboveTop = anchor.y - CONTEXT_BAR_GAP - CONTEXT_BAR_H;
   const belowTop = anchor.y + anchor.h + CONTEXT_BAR_GAP;
-  const candidates = (['above', 'below'] as const).map((side) => {
-    const top = side === 'above' ? Math.max(CONTEXT_BAR_MIN, aboveTop) : belowTop;
-    const bar: PixelRect = { x: left, y: top, w: CONTEXT_BAR_W, h: CONTEXT_BAR_H };
-    const overlap = others.reduce((acc, o) => acc + intersectionArea(bar, o), 0);
-    return { side, top, overlap };
-  });
+  // »Oberhalb«, das nicht mehr ins Canvas passt, darf nicht einfach auf den
+  // oberen Rand geklemmt und dann normal bewertet werden: Die Leiste läge
+  // auf der eigenen Auswahl — und da diese nicht in `others` steckt, entstünde
+  // dafür kein Punkt. Die Überdeckung der Auswahl geht bei Klemmung deshalb
+  // als Strafpunkte mit ein; ist „untern“ besser, weicht die Leiste nach unten
+  // aus, statt das selektierte Modul zu verdecken.
+  const aboveFits = aboveTop >= CONTEXT_BAR_MIN;
+  const aboveBar: PixelRect = { x: left, y: aboveFits ? aboveTop : CONTEXT_BAR_MIN, w: CONTEXT_BAR_W, h: CONTEXT_BAR_H };
+  const aboveOverlap =
+    others.reduce((acc, o) => acc + intersectionArea(aboveBar, o), 0) +
+    (aboveFits ? 0 : intersectionArea(aboveBar, anchor));
+  const belowBar: PixelRect = { x: left, y: belowTop, w: CONTEXT_BAR_W, h: CONTEXT_BAR_H };
+  const belowOverlap = others.reduce((acc, o) => acc + intersectionArea(belowBar, o), 0);
+  const candidates = [
+    { side: 'above' as const, top: aboveBar.y, overlap: aboveOverlap },
+    { side: 'below' as const, top: belowBar.y, overlap: belowOverlap },
+  ];
   const [above, below] = candidates as [(typeof candidates)[number], (typeof candidates)[number]];
   // Überschneidungs-Score entscheidet; Gleichstand → oberhalb.
   if (above.overlap !== below.overlap) {

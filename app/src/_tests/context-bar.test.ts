@@ -55,3 +55,22 @@ describe('chooseContextBarPlacement', () => {
     expect(p.side).toBe('above');
   });
 });
+
+describe('chooseContextBarPlacement — Randfälle der Oberkante', () => {
+  it('weicht nach unten aus, wenn »oberhalb« wegen Randklemmung die Auswahl selbst bedecken würde', () => {
+    // Sehr nahe am oberen Rand (z. B. nach Pan nach oben): oberhalb klemmt auf MIN
+    // und läge auf dem selektierten Modul — untern ist frei → nach unten.
+    const sel = anchor(300, 12, 60, 30);
+    const p = chooseContextBarPlacement(sel, [], 900);
+    expect(p.side).toBe('below');
+    expect(p.top).toBe(12 + 30 + 8);
+  });
+
+  it('bleibt oberhalb, wenn die geklemmte Leiste die Auswahl nicht bedeckt (bisheriges Verhalten)', () => {
+    // sel.y = 52, Leiste 8..52 → berührt nur, keine Überdeckung → oberhalb bleibt.
+    const sel = anchor(300, 52, 60, 40);
+    const p = chooseContextBarPlacement(sel, [], 900);
+    expect(p.side).toBe('above');
+    expect(p.top).toBe(CONTEXT_BAR_MIN);
+  });
+});

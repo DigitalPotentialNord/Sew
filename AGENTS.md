@@ -18,7 +18,7 @@ Zuerst lesen: **Abschnitt 1 (Was ist das)**, **Abschnitt 3 (Regeln)**,
 cd app
 npm install
 npm run dev                 # http://localhost:5173
-npm run check               # typecheck + lint + 359 Unit-Tests  ← Pflicht vor „fertig“
+npm run check               # typecheck + lint + 361 Unit-Tests  ← Pflicht vor „fertig“
 PW_NO_SERVER=1 npx playwright test   # 45 Abnahmetests (Dev-Server muss laufen)
 ```
 
@@ -26,7 +26,7 @@ PW_NO_SERVER=1 npx playwright test   # 45 Abnahmetests (Dev-Server muss laufen)
 | --- | --- |
 | Was | Browser-Tool, das aus Modulen ein maßhaltiges Näh-Schnittmuster erzeugt |
 | Stack | Vite 8 · React 18 · TypeScript 5.6 (strict) · Zustand 4 · Zod 4 · pdf-lib |
-| Tests | Vitest (359) + Playwright (45) |
+| Tests | Vitest (361) + Playwright (45) |
 | Sprache | Oberfläche **deutsch**, Code-Bezeichner **deutsch** (Fachbegriffe) |
 | Backend | keins. `localStorage` + Datei-Exporte |
 | Kern | `app/src/core/`, reine Funktionen: `Project → Construction` |
@@ -116,7 +116,7 @@ Deshalb ist der Kern framework-frei, deterministisch und dicht getestet.
     ├── src/state/store.ts     (419) Zustand: project/past/future + session + toasts
     ├── src/ui/                React-Oberfläche (5 Ansichten, Canvas, Panels, primitives)
     ├── src/i18n/de.ts         (602 Zeilen, 535 Schlüssel) alle sichtbaren Strings
-    ├── src/_tests/            17 Vitest-Dateien, 359 Tests (construction, project, store, geometry, fixes, i18n, export, pdf, properties, module-heights, fix-suggestions, ui-css, operations, fabric-plan)
+    ├── src/_tests/            17 Vitest-Dateien, 361 Tests (construction, project, store, geometry, fixes, i18n, export, pdf, properties, module-heights, fix-suggestions, ui-css, operations, fabric-plan)
     ├── tests/acceptance.spec.ts    33 Abnahme-Tests (Abnahmekriterien aus `docs/product/prd.md`)
     └── tests/editor-redesign.spec.ts  12 Editor-Redesign-Tests (Starter, Walkthrough, Seitenwechsel, Modi)
     └── docs-shots/            Screenshots des laufenden Editors + Beispiel-PDF
@@ -327,7 +327,7 @@ Eine Änderung ist fertig, wenn **alle** Zeilen grün sind:
 cd app
 npx tsc --noEmit                     # 0 Fehler
 npx eslint src                       # 0 Fehler
-npx vitest run                       # 359 Tests, 17 Dateien
+npx vitest run                       # 361 Tests, 17 Dateien
 npm run dev &                        # Dev-Server für E2E
 PW_NO_SERVER=1 npx playwright test   # 45 Tests
 npm run build                        # Build OK
@@ -349,7 +349,7 @@ Behauptung „sieht gut aus“ überprüfbar bleibt.
 | --- | --- |
 | `tsc --noEmit` | 0 Fehler |
 | `eslint src` | 0 Fehler |
-| `vitest run` | 359 Tests / 17 Dateien |
+| `vitest run` | 361 Tests / 17 Dateien |
 | `playwright test` | 45 Tests |
 | `npm run build` | OK, Editor-Chunk ≈ 430 kB |
 | Vorlagen | je 0 Fehler / 0 Warnungen |

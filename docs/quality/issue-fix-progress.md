@@ -18,7 +18,7 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 ## Legende
 
 - Status: ✅ implementiert & lokal verifiziert (tsc/eslint/vitest/build/size) · ⏳ E2E/visuell in CI abzunehmen
-- Zahlen: Tests nach dieser Sitzung **359 Unit-Tests / 17 Dateien** (vor Sitzungsbeginn: 255 / 9)
+- Zahlen: Tests nach dieser Sitzung **361 Unit-Tests / 17 Dateien** (vor Sitzungsbeginn: 255 / 9)
 
 ## Fortschrittsübersicht
 
@@ -35,6 +35,8 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 | 20 | Anleitung Reihenfolge/Spalten (Hoch) | ✅ | `8c416f7` | `PHASE_ORDER` cut→prepare→sew-order→assemble→finish (aus construction.ts); M03 topstitch-zip → sew-order; leeres `<span/>`-Grid-Platzier-Bug behoben |
 | 21 | Modulkarten unsichtbar, Kategorietabs (Hoch, a11y) | ✅ | `aba70d4` | `.lib-text` flex 0 0 auto; `.lib-cats` flex-wrap + keine Scrollbar-Kaschierung |
 | 22 | Warnungs-Sheet, aria, Formate (Niedrig–Mittel) | ✅ | `fb71836` | Finding-Karten ohne verschachtelte interaktive Elemente; ein × im Sheet; aria-label Papierkorb; PDF/Druck disabled bei Fehlern; Schlaufen/Singular/Komma-Dezimal; SVG-Label-Gate |
+| 12-Härtung | Kontextleiste nach Selbstprüfung | ✅ | siehe letzter Commit | `.ctx-bar` klebt bei Pan-nach-oben nicht mehr auf der eigenen Auswahl (Strafpunkte statt blindem Klemmen); 2 neue Unit-Tests |
+| e2e | Playwright in CI grün (PR #23) | ✅ | `5d09e18` | 3 Alt-Erwartungen angepasst (Tabbar/Toast 5→8 durch #18; `.finding.error` 2→4 durch #18; Feldlabels bei 90° durch #12) + Buttons-disabled-#22 |
 
 ## Bekannte Abnahme-Lücken (ehrlich)
 
