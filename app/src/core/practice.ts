@@ -40,4 +40,6 @@ export const LIMITS = {
   maxModulesPerChannel: 24,
   channelFillWarnPct: 98,
   channelFillInfoPct: 40,
+  /** Ziel-Auslastung für den V-G-08-Verbreiterungs-Fix (≤ 95 % nach Anwendung). */
+  channelFillTargetPct: 95,
 } as const;

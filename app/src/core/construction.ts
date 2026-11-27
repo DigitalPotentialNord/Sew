@@ -432,12 +432,16 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
 
   for (const r of placedRows) {
     if (r.fillPct > LIMITS.channelFillWarnPct && r.usedMm > 0) {
+      // Ziel-Auslastung ≤ 95 %: usedMm / availW' ≤ 0,95 → availW' ≥ usedMm / 0,95.
+      // `usedMm ≤ availW` (sonst feuert V-G-01), also ist das Ergebnis größer als
+      // die aktuelle Panelbreite — ein Fix, der verkleinert oder auf 0 setzt, ist ausgeschlossen.
+      const targetAvail = Math.ceil(r.usedMm / (LIMITS.channelFillTargetPct / 100));
       findings.push({
         ruleId: 'V-G-08',
         severity: 'warn',
         subject: { kind: 'panel' },
         values: { zeile: r.name, pct: r.fillPct },
-        fix: { kind: 'widenBase', toMm: Math.round(flapW + (r.usedMm - availW)) },
+        fix: { kind: 'widenBase', toMm: targetAvail + 2 * PRACTICE.edgeMarginMm },
         dismissible: true,
       });
     }
