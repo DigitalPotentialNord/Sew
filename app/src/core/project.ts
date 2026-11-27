@@ -6,6 +6,7 @@ import { version as appVersion } from '../../package.json';
 import { z } from 'zod';
 import { moduleDef } from './modules';
 import { LIMITS, PRACTICE } from './practice';
+import { relocateInModules } from './fixes';
 import { SCHEMA_VERSION, type Instance, type Project, type ProjectBase, type RowSpec } from './construction';
 import type { ModuleTypeId, Params } from './types';
 
@@ -106,21 +107,35 @@ export function validateProject(input: unknown): { ok: true; project: Project } 
   const ids = new Set(p.modules.map((m) => m.id));
   if (ids.size !== p.modules.length) issues.push({ path: 'modules', message: 'Modul-IDs sind nicht eindeutig.' });
   const rowIds = new Set(p.rows.map((r) => r.id));
+  if (rowIds.size !== p.rows.length) issues.push({ path: 'rows', message: 'Zeilen-IDs sind nicht eindeutig.' });
   for (const m of p.modules) {
     if (!rowIds.has(m.rowId)) issues.push({ path: `modules.${m.id}.rowId`, message: 'Zeile existiert nicht.' });
-    if (!Object.prototype.hasOwnProperty.call(moduleTypes, m.typeId)) {
+    if (!isValidModuleTypeId(m.typeId)) {
       issues.push({ path: `modules.${m.id}.typeId`, message: `Unbekannter Modultyp ${m.typeId}.` });
       continue;
     }
     const def = moduleDef(m.typeId);
     for (const [k, v] of Object.entries(m.params)) {
+      const f = def.fields.find((x) => x.key === k);
       if (typeof v === 'number') {
         if (!Number.isFinite(v) || v < 0 || v > 5000) {
           issues.push({ path: `modules.${m.id}.params.${k}`, message: `Wert außerhalb zulässiger Grenzen: ${v}.` });
         }
-        const f = def.fields.find((x) => x.key === k);
         if (f?.kind === 'count' && v < 1) {
           issues.push({ path: `modules.${m.id}.params.${k}`, message: `Anzahl ${k} muss ≥ 1 sein.` });
+        }
+        if (f && (f.kind === 'bool' || f.kind === 'enum')) {
+          issues.push({ path: `modules.${m.id}.params.${k}`, message: `Falscher Typ für ${k}.` });
+        }
+      } else if (typeof v === 'boolean') {
+        if (f && f.kind !== 'bool') {
+          issues.push({ path: `modules.${m.id}.params.${k}`, message: `Falscher Typ für ${k}.` });
+        }
+      } else if (typeof v === 'string') {
+        if (f && f.kind !== 'enum') {
+          issues.push({ path: `modules.${m.id}.params.${k}`, message: `Falscher Typ für ${k}.` });
+        } else if (f?.options && !f.options.some((o) => o.value === v)) {
+          issues.push({ path: `modules.${m.id}.params.${k}`, message: `Unbekannte Option „${v}“ für ${k}.` });
         }
       }
     }
@@ -133,6 +148,10 @@ const moduleTypes: Record<string, true> = {
   M01: true, M02: true, M03: true, M04: true, M05: true, M06: true, M07: true, M08: true,
   M09: true, M10: true, M11: true, M12: true, M13: true, M14: true, M15: true, M16: true,
 };
+
+export function isValidModuleTypeId(id: string): id is ModuleTypeId {
+  return Object.prototype.hasOwnProperty.call(moduleTypes, id);
+}
 
 export function migrate(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
@@ -251,25 +270,8 @@ export function updateParams(p: Project, id: string, key: string, value: number 
 
 export function moveInstance(p: Project, id: string, rowId: string, index: number): Project {
   const src = p.modules.find((m) => m.id === id);
-  if (!src) return p;
-  const rest = p.modules.filter((m) => m.id !== id);
-  const targetRowIdx = rest.filter((m) => m.rowId === rowId).length;
-  const clamped = Math.max(0, Math.min(index, targetRowIdx));
-  // Einfügeposition in Gesamtliste bestimmen
-  const rowMembers = rest.filter((m) => m.rowId === rowId);
-  let insertAt: number;
-  if (rowMembers.length === 0) {
-    const lastOfRow = rest.map((m) => m.rowId === rowId).lastIndexOf(true);
-    insertAt = lastOfRow === -1 ? rest.length : lastOfRow + 1;
-    const firstOther = rest.findIndex((m, i) => i > insertAt && m.rowId !== rowId);
-    insertAt = firstOther === -1 ? rest.length : firstOther;
-  } else {
-    const anchor = rowMembers[Math.min(clamped, rowMembers.length - 1)]!;
-    insertAt = rest.indexOf(anchor);
-    if (clamped >= rowMembers.length) insertAt = rest.indexOf(rowMembers[rowMembers.length - 1]!) + 1;
-  }
-  const modules = [...rest];
-  modules.splice(insertAt, 0, { ...src, rowId });
+  if (!src || !p.rows.some((r) => r.id === rowId)) return p;
+  const modules = relocateInModules(p.modules, id, src.side, rowId, index);
   return { ...p, modules, updatedAt: nowIso() };
 }
 
@@ -289,6 +291,7 @@ export function moveToSide(p: Project, id: string, side: 'left' | 'right'): Proj
 }
 
 export function addRow(p: Project): Project {
+  if (p.rows.length >= LIMITS.maxRows) return p;
   const id = newId('r');
   return { ...p, rows: [...p.rows, { id, name: `Zeile ${p.rows.length + 1}` }], updatedAt: nowIso() };
 }
@@ -304,7 +307,9 @@ export function removeRow(p: Project, rowId: string): Project {
 }
 
 export function renameRow(p: Project, rowId: string, name: string): Project {
-  return { ...p, rows: p.rows.map((r) => (r.id === rowId ? { ...r, name } : r)), updatedAt: nowIso() };
+  const clean = name.trim().slice(0, 60);
+  if (!clean) return p;
+  return { ...p, rows: p.rows.map((r) => (r.id === rowId ? { ...r, name: clean } : r)), updatedAt: nowIso() };
 }
 
 // ─── Serialisierung ──────────────────────────────────────────────────────────

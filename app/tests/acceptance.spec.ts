@@ -204,9 +204,9 @@ test.describe('4 — Regelwerk und Warnungen', () => {
     await width.fill('280');
     await width.blur();
     // Fehleranzeige in der Tabbar (Badge) und in der Warnungsleiste.
-    // Durch die Höhenvalidierung (#18) kommen zu den Platzfehlern die
-    // zugehörigen Höhenfehler (V-M02-03/V-M03-04/V-M11-03) und V-G-13 hinzu: 8.
-    await expect(page.locator('.tabbar')).toContainText('8');
+    // Durch die intelligente Platzierung landet M02 auf der freien rechten Seite,
+    // sodass bei breite=280 genau die beiden echten Breitenfehler (V-G-01 + V-M02-02) greifen.
+    await expect(page.locator('.tabbar')).toContainText('2');
     await expect(page.locator('.pane.right')).toContainText(/Fehler/);
     await expect(page.locator('.pane.right')).toContainText(/Export gesperrt/);
 
@@ -214,7 +214,7 @@ test.describe('4 — Regelwerk und Warnungen', () => {
     // nicht bloß wirkungslos — siehe #22.
     const printBtn = page.locator('.topbar .btn-split > button').first();
     await expect(printBtn).toBeDisabled();
-    await expect(printBtn).toHaveAttribute('title', /8 Fehler/);
+    await expect(printBtn).toHaveAttribute('title', /2 Fehler/);
     await expect(page.locator('.topbar .btn-split > button').nth(1)).toBeDisabled();
   });
 
@@ -436,9 +436,9 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await page.locator('.canvas-svg g.mod').first().click({ force: true });
     await page.keyboard.press('r');
     await page.getByRole('button', { name: /Warnungen/i }).first().click();
-    // V-G-13 (Gesamtüberlauf) + V-M03-04/V-M09-01/V-M11-03 (Höhen-/Platzfehler
-    // nach der Drehung, neu durch #18) = 4.
-    await expect(page.locator('.pane.right .finding.error')).toHaveCount(4);
+    // V-G-13 (Gesamtüberlauf) + V-M03-04/V-M07-04/V-M09-01/V-M11-03 (Höhen-/Platzfehler
+    // nach der Drehung inkl. strenger Verschluss-Höhenprüfung V-M07-04) = 5.
+    await expect(page.locator('.pane.right .finding.error')).toHaveCount(5);
     await page.locator('.pane.right .finding.error button').first().click();
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
   });

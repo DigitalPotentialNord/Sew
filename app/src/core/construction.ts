@@ -7,6 +7,7 @@ import { hashString, mm, rect, type Mm, type Rect } from './geometry';
 import { moduleDef } from './modules';
 import { LIMITS, PRACTICE } from './practice';
 import { findingKey } from './fixes';
+import { computeSpineBulk, evaluateConstruction, type ConstructionEvaluation } from './evaluation';
 import type {
   ExtraMaterial,
   Finding,
@@ -18,6 +19,7 @@ import type {
   Prim,
   SewingOperation,
   Certainty,
+  Side,
 } from './types';
 
 // ─── Projektmodell (Eingabe) ─────────────────────────────────────────────────
@@ -26,8 +28,7 @@ import type {
 // 'left' (nicht-destruktiv: ein v2-Projekt sieht danach genauso aus wie vorher).
 export const SCHEMA_VERSION = 3;
 
-/** Innenfläche eines aufgeschlagenen Mäppchens. Siehe Positionsmodell-Entscheid. */
-export type Side = 'left' | 'right';
+export type { Side, ConstructionEvaluation };
 
 export interface ProjectBase {
   readonly form: 'book';
@@ -77,6 +78,7 @@ export interface PlacedModule {
   readonly instanceId: string;
   readonly typeId: ModuleTypeId;
   readonly rowId: string;
+  readonly side: Side;
   readonly rect: Rect;
   readonly rotation: number;
   readonly params: Params;
@@ -90,6 +92,8 @@ export interface PlacedRow {
   readonly name: string;
   readonly rect: Rect;
   readonly fillPct: number;
+  readonly fillLeftPct: number;
+  readonly fillRightPct: number;
   readonly usedMm: Mm;
   /** Belegte Breite je Innenfläche (v3) — die Budgetregel gilt pro Seite. */
   readonly usedLeft: Mm;
@@ -148,6 +152,7 @@ export interface Construction {
   readonly fabricPlan: FabricPlan | null;
   readonly operations: readonly SewingOperation[];
   readonly findings: readonly Finding[];
+  readonly evaluation: ConstructionEvaluation;
   readonly metrics: {
     readonly moduleCount: number;
     readonly pieceCount: number;
@@ -182,6 +187,7 @@ function baseContext(p: Project): LayoutContext {
     rowHeightMm: mm(Math.max(0, p.base.heightMm - 2 * PRACTICE.edgeMarginMm)),
     seamAllowanceMm: effectiveSeamAllowance(p),
     fabricWidthMm: mm(p.settings.fabricWidthMm),
+    spineWidthMm: mm(p.base.spineWidthMm),
   };
 }
 
@@ -304,6 +310,7 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
         instanceId: inst.id,
         typeId: inst.typeId,
         rowId: r.row.id,
+        side: inst.side,
         rect: rectPlaced,
         rotation: inst.rotation,
         params: inst.params,
@@ -313,13 +320,27 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
       });
 
       findings.push(...def.validate(inst.params, checkCtx, inst.id).map((f) => orientFinding(f, swap, p)));
+
+      // V-G-11: Fadenlauf-Regel — fadenlaufkritische Module (z. B. Nadelkanal M06)
+      // dürfen nicht 90°/270° gedreht werden, da der Kanal sonst quer ausleiert.
+      if (swap && def.grainSensitive) {
+        findings.push({
+          ruleId: 'V-G-11',
+          severity: 'error',
+          subject: { kind: 'module', id: inst.id },
+          values: { typ: inst.typeId, winkel: inst.rotation },
+          fix: { kind: 'setRotation', moduleId: inst.id, rotation: 0 },
+          dismissible: false,
+        });
+      }
+
       if (isRight) xRight += dim.w;
       else xLeft += dim.w;
     }
 
-    // Modul, das höher ist als seine Zeile: Überlappung mit der nächsten Zeile.
+    // V-G-14: Einzelnes Modul ist höher als die gesamte nutzbare Panelhöhe.
     for (const { inst, dim } of r.dims) {
-      if (dim.h <= r.height) continue;
+      if (dim.h <= availH) continue;
       findings.push({
         ruleId: 'V-G-14',
         severity: 'error',
@@ -328,10 +349,10 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
           typ: inst.typeId,
           hoehe: Math.round(dim.h),
           zeile: r.row.name,
-          zeilenhoehe: Math.round(r.height),
-          ueberhang: Math.round(dim.h - r.height),
+          zeilenhoehe: Math.round(availH),
+          ueberhang: Math.round(dim.h - availH),
         },
-        fix: { kind: 'growHeight', toMm: Math.round(p.base.heightMm + (dim.h - r.height)) },
+        fix: { kind: 'growHeight', toMm: Math.round(p.base.heightMm + (dim.h - availH)) },
         dismissible: false,
       });
     }
@@ -339,12 +360,16 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
     // usedMm = die beanspruchendere Seite (kompatibel mit Verbrauchern, die einen
     // Kennwert erwarten). fillPct entsprechend das Maximum.
     const usedMm = mm(Math.max(usedLeft, usedRight));
-    const fillPct = availW > 0 ? Math.round((usedMm / availW) * 100) : 0;
+    const fillLeftPct = availW > 0 ? Math.round((usedLeft / availW) * 100) : 0;
+    const fillRightPct = availW > 0 ? Math.round((usedRight / availW) * 100) : 0;
+    const fillPct = Math.max(fillLeftPct, fillRightPct);
     placedRows.push({
       id: r.row.id,
       name: r.row.name,
       rect: rect(PRACTICE.edgeMarginMm, y, availW, Math.max(r.height, 1)),
       fillPct,
+      fillLeftPct,
+      fillRightPct,
       usedMm,
       usedLeft: mm(usedLeft),
       usedRight: mm(usedRight),
@@ -425,7 +450,60 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
         severity: 'warn',
         subject: { kind: 'project' },
         values: { anzahl: p.modules.length, max: LIMITS.maxModulesPerChannel },
+        fix: { kind: 'removeModule', moduleId: p.modules[p.modules.length - 1]!.id },
         dismissible: true,
+      });
+    }
+    const closures = p.modules.filter((m) => m.typeId === 'M07' || m.typeId === 'M08');
+    if (closures.length > LIMITS.maxClosures) {
+      const extra = closures[closures.length - 1]!;
+      findings.push({
+        ruleId: 'V-G-19',
+        severity: 'warn',
+        subject: { kind: 'module', id: extra.id },
+        values: { anzahl: closures.length, max: LIMITS.maxClosures },
+        fix: { kind: 'removeModule', moduleId: extra.id },
+        dismissible: true,
+      });
+    }
+  }
+
+  // V-G-17: Höhenauslastung kritisch (> 98 % und < 4 mm Restspielraum)
+  const remainingH = availH - totalHeight;
+  const heightFillPct = availH > 0 ? Math.round((totalHeight / availH) * 100) : 0;
+  if (p.modules.length > 0 && overflowH === 0 && remainingH < PRACTICE.minVerticalReserveMm && heightFillPct > LIMITS.channelFillWarnPct) {
+    findings.push({
+      ruleId: 'V-G-17',
+      severity: 'warn',
+      subject: { kind: 'panel' },
+      values: {
+        belegt: Math.round(totalHeight),
+        verfuegbar: Math.round(availH),
+        rest: Math.round(remainingH),
+        pct: heightFillPct,
+      },
+      fix: { kind: 'growHeight', toMm: Math.round(flapH + (PRACTICE.minVerticalReserveMm - remainingH) + 6) },
+      dismissible: true,
+    });
+  }
+
+  // V-G-16: Bund-Kapazität gegen gefaltetes Innen-Volumen
+  if (p.modules.length > 0) {
+    const bulk = computeSpineBulk(p.modules, p.base.hasLining);
+    const deficit = bulk.requiredSpineMm - p.base.spineWidthMm;
+    if (deficit > 0) {
+      const hard = deficit >= 8 || (bulk.leftBulkMm > 0 && bulk.rightBulkMm > 0 && deficit >= 4);
+      findings.push({
+        ruleId: 'V-G-16',
+        severity: hard ? 'error' : 'warn',
+        subject: { kind: 'panel' },
+        values: {
+          bund: Math.round(p.base.spineWidthMm),
+          benoetigt: bulk.requiredSpineMm,
+          fehlt: deficit,
+        },
+        fix: { kind: 'setSpineWidth', toMm: bulk.requiredSpineMm },
+        dismissible: !hard,
       });
     }
   }
@@ -465,6 +543,50 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
       fix: { kind: 'setCornerRadius', toMm: p.settings.seamAllowanceMm + 4 },
       dismissible: false,
     });
+  }
+
+  // V-G-15: Eckenradius-Kollision mit äußeren Modulen (exakter Kreisbogen-Schnitt)
+  const rCorner = p.base.cornerRadiusMm;
+  const bookW = 2 * flapW + p.base.spineWidthMm;
+  if (rCorner > PRACTICE.edgeMarginMm && placedModules.length > 0) {
+    const cornerIntrusion = (dx: number, dy: number): number => {
+      if (dx >= rCorner || dy >= rCorner || dx < PRACTICE.edgeMarginMm || dy < PRACTICE.edgeMarginMm) return 0;
+      return Math.hypot(rCorner - dx, rCorner - dy) - rCorner;
+    };
+    let worstIntrusion = 0;
+    let worstSafeR = rCorner;
+    let worstModId = '';
+    for (const pm of placedModules) {
+      const corners: readonly [number, number][] = [
+        [pm.rect.x, pm.rect.y],
+        [pm.rect.x, flapH - (pm.rect.y + pm.rect.h)],
+        [bookW - (pm.rect.x + pm.rect.w), pm.rect.y],
+        [bookW - (pm.rect.x + pm.rect.w), flapH - (pm.rect.y + pm.rect.h)],
+      ];
+      for (const [dx, dy] of corners) {
+        const intr = cornerIntrusion(dx, dy);
+        if (intr > 0.5 && intr > worstIntrusion) {
+          worstIntrusion = intr;
+          worstSafeR = Math.floor(dx + dy + Math.sqrt(2 * dx * dy));
+          worstModId = pm.instanceId;
+        }
+      }
+    }
+    if (worstIntrusion > 0.5) {
+      const targetR = Math.max(p.settings.seamAllowanceMm + 4, Math.min(LIMITS.cornerRadiusMm.max, worstSafeR));
+      findings.push({
+        ruleId: 'V-G-15',
+        severity: 'error',
+        subject: worstModId ? { kind: 'module', id: worstModId } : { kind: 'panel' },
+        values: {
+          radius: Math.round(rCorner),
+          ueberschnitt: Math.ceil(worstIntrusion),
+          max: targetR,
+        },
+        fix: { kind: 'setCornerRadius', toMm: targetR },
+        dismissible: false,
+      });
+    }
   }
 
   return { rows: placedRows, modules: placedModules, findings };
@@ -644,43 +766,48 @@ export function packFabric(
     return { pieces: [], rows: 0, usedHeightMm: mm(0), meters: 0, wastePct };
   }
   const usableWidth = fabricWidthMm * 0.98;
-  let shelfY = 0;
-  let shelfH = 0;
-  let x = 0;
-  let rows = 0; // vollständig geschlossene Reihen
+  interface Shelf {
+    readonly y: number;
+    readonly h: number;
+    usedW: number;
+  }
+  const shelves: Shelf[] = [];
+  let cursorY = 0;
 
   for (const e of expanded) {
     if (e.w > fabricWidthMm) {
-      // Passt nicht in die Stoffbreite → wird als Warnung gemeldet (V-G-12), hier trotzdem
-      // platziert. ZUERST die offene Reihe abschließen, sonst überlappt das Teil die
-      // bereits liegenden Teile in derselben Reihe.
-      if (x > 0 && shelfH > 0) {
-        shelfY += shelfH;
-        shelfH = 0;
-        x = 0;
-        rows += 1;
-      }
-      items.push({ pieceId: e.id, rect: rect(0, shelfY, e.w, e.h), count: 1 });
-      shelfY += e.h;
-      rows += 1;
+      // Passt nicht in die Stoffbreite → eigene Reihe (V-G-12 meldet), garantiert ohne Überlappung.
+      items.push({ pieceId: e.id, rect: rect(0, cursorY, e.w, e.h), count: 1 });
+      shelves.push({ y: cursorY, h: e.h, usedW: e.w });
+      cursorY += e.h;
       continue;
     }
-    if (x + e.w > usableWidth) {
-      shelfY += shelfH;
-      shelfH = 0;
-      x = 0;
-      rows += 1;
+    // Best-Fit-Decreasing über alle offenen Reihen (Fadenlauf-Sperre: keine Drehung).
+    let bestShelf: Shelf | null = null;
+    let bestRem = Number.POSITIVE_INFINITY;
+    for (const sh of shelves) {
+      if (e.h <= sh.h && sh.usedW + e.w <= usableWidth) {
+        const rem = usableWidth - (sh.usedW + e.w);
+        if (rem < bestRem) {
+          bestRem = rem;
+          bestShelf = sh;
+        }
+      }
     }
-    items.push({ pieceId: e.id, rect: rect(x, shelfY, e.w, e.h), count: 1 });
-    x += e.w;
-    shelfH = Math.max(shelfH, e.h);
+    if (bestShelf) {
+      items.push({ pieceId: e.id, rect: rect(bestShelf.usedW, bestShelf.y, e.w, e.h), count: 1 });
+      bestShelf.usedW += e.w;
+    } else {
+      const sh: Shelf = { y: cursorY, h: e.h, usedW: e.w };
+      shelves.push(sh);
+      items.push({ pieceId: e.id, rect: rect(0, cursorY, e.w, e.h), count: 1 });
+      cursorY += e.h;
+    }
   }
 
-  const usedHeight = mm(shelfY + shelfH);
+  const usedHeight = mm(cursorY);
   const meters = Math.ceil(((usedHeight * (1 + wastePct / 100)) / 1000) * 100) / 100;
-  // Offene letzte Reihe zählen — geschlossene zählen bereits in `rows`.
-  const totalRows = rows + (shelfH > 0 || x > 0 ? 1 : 0);
-  return { pieces: items, rows: totalRows, usedHeightMm: usedHeight, meters, wastePct };
+  return { pieces: items, rows: shelves.length, usedHeightMm: usedHeight, meters, wastePct };
 }
 
 
@@ -1020,9 +1147,11 @@ export function construct(p: Project): Construction {
 
   const findings: Finding[] = [...layoutFindings];
 
-  // Stoffbreite gegen Teilebreite (V-G-12)
+  // Stoff-, Futter- und Einlagenbreite + Wendbarkeit gegen Schnittteile prüfen
   for (const pc of pieces) {
-    if (pc.kind === 'cut' && pc.material === 'fabric' && pc.w > p.settings.fabricWidthMm) {
+    if (pc.kind !== 'cut') continue;
+    // V-G-12: Außenstoff- oder Futterteil breiter als eingestellte Stoffbreite
+    if ((pc.material === 'fabric' || pc.material === 'lining') && pc.w > p.settings.fabricWidthMm) {
       findings.push({
         ruleId: 'V-G-12',
         severity: 'warn',
@@ -1031,6 +1160,38 @@ export function construct(p: Project): Construction {
         fix: { kind: 'setFabricWidth', toMm: Math.round(pc.w + 40) },
         dismissible: true,
       });
+    }
+    // V-G-20: Einlage oder Vlies breiter als typische Rollenbreite (900 mm)
+    if ((pc.material === 'interfacing' || pc.material === 'batting') && pc.w > PRACTICE.interfacingWidthMm) {
+      const fix: Finding['fix'] = pc.sourceModuleId
+        ? { kind: 'removeModule', moduleId: pc.sourceModuleId }
+        : {
+            kind: 'widenBase',
+            toMm: Math.max(LIMITS.baseWidthMm.min, Math.floor((PRACTICE.interfacingWidthMm - p.base.spineWidthMm) / 2)),
+          };
+      findings.push({
+        ruleId: 'V-G-20',
+        severity: 'warn',
+        subject: pc.sourceModuleId ? { kind: 'module', id: pc.sourceModuleId } : { kind: 'panel' },
+        values: { teil: pc.nameKey, breite: Math.round(pc.w), einlage: PRACTICE.interfacingWidthMm },
+        fix,
+        dismissible: true,
+      });
+    }
+    // V-G-18: Schnittteil unter Mindestmaß für Wendbarkeit/Nähbarkeit (< 15 mm Netto)
+    if (pc.role !== 'panel' && pc.role !== 'lining' && pc.role !== 'stabilizer' && pc.sourceModuleId) {
+      const minSide = Math.min(pc.netW, pc.netH);
+      if (minSide < PRACTICE.minTurnMm) {
+        const hard = minSide < 10;
+        findings.push({
+          ruleId: 'V-G-18',
+          severity: hard ? 'error' : 'warn',
+          subject: { kind: 'module', id: pc.sourceModuleId },
+          values: { teil: pc.nameKey, mass: Math.round(minSide), min: PRACTICE.minTurnMm },
+          fix: { kind: 'removeModule', moduleId: pc.sourceModuleId },
+          dismissible: !hard,
+        });
+      }
     }
   }
 
@@ -1053,8 +1214,50 @@ export function construct(p: Project): Construction {
   const fabricAreaM2 =
     pieces.filter((x) => x.kind === 'cut' && (x.material === 'fabric' || x.material === 'lining')).reduce((a, x) => a + (x.w * x.h * x.count) / 1e6, 0);
   const seamLengthMm = pieces.filter((x) => x.kind === 'cut').reduce((a, x) => a + 2 * (x.w + x.h) * x.count, 0);
+  const availW = p.base.widthMm - 2 * PRACTICE.edgeMarginMm;
+  const availH = p.base.heightMm - 2 * PRACTICE.edgeMarginMm;
   const totalUsed = rows.reduce((a, r) => a + r.usedMm, 0);
-  const totalAvail = rows.length * (p.base.widthMm - 2 * PRACTICE.edgeMarginMm);
+  const totalAvail = rows.length * availW;
+  const totalRowHeightMm = rows.reduce((a, r) => a + (r.usedMm > 0 ? r.rect.h : 0), 0);
+  const rightOrigin = p.base.widthMm + p.base.spineWidthMm;
+  const exactMaterialsRatio =
+    materials.length > 0 ? materials.filter((m) => m.certainty === 'exact').length / materials.length : 1;
+
+  const evaluation = evaluateConstruction({
+    base: p.base,
+    settings: p.settings,
+    modules: modules.map((m) => {
+      const sideRightEdge = m.side === 'right' ? rightOrigin + p.base.widthMm - PRACTICE.edgeMarginMm : p.base.widthMm - PRACTICE.edgeMarginMm;
+      const overflows = m.rect.x + m.rect.w > sideRightEdge + 0.5 || m.rect.y + m.rect.h > p.base.heightMm - PRACTICE.edgeMarginMm + 0.5;
+      return {
+        id: m.instanceId,
+        typeId: m.typeId,
+        side: m.side,
+        params: m.params,
+        rect: { w: m.rect.w, h: m.rect.h },
+        overflows,
+      };
+    }),
+    rows: rows.map((r) => ({
+      height: r.usedMm > 0 ? r.rect.h : 0,
+      fillLeftPct: r.fillLeftPct,
+      fillRightPct: r.fillRightPct,
+      fillPct: r.fillPct,
+      overflowLeftMm: Math.max(0, r.usedLeft - availW),
+      overflowRightMm: Math.max(0, r.usedRight - availW),
+    })),
+    totalRowHeightMm,
+    availHeightMm: availH,
+    availWidthMm: availW,
+    fabricPlan: {
+      fabricWidthMm: p.settings.fabricWidthMm,
+      usedHeightMm: fabricPlan?.usedHeightMm ?? 0,
+      pieces: fabricPlan?.pieces ?? [],
+    },
+    findings: sorted,
+    exactMaterialsRatio,
+    operationCount: operations.length,
+  });
 
   // I7/I8: der Hash hängt nur an der ABSICHT (Base, Zeilen, Modulparameter, Praxisversion),
   // nicht an IDs, Zeitstempeln oder der Speicherreihenfolge. Die Reihenfolge der Module
@@ -1094,6 +1297,7 @@ export function construct(p: Project): Construction {
     fabricPlan,
     operations,
     findings: sorted,
+    evaluation,
     metrics: {
       moduleCount: p.modules.length,
       pieceCount: pieces.length,

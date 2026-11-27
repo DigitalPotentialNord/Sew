@@ -1,13 +1,29 @@
 /** Projektverwaltung: neu, Vorlagen, speichern, öffnen, duplizieren, import, export. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TEMPLATES } from '../core/project';
 import { LIMITS } from '../core/practice';
 import { useStore } from '../state/store';
 import { formatAmount } from '../core/construction';
 import { t } from '../i18n/de';
 import { downloadText, fileName, timestampForFile } from '../core/export';
-import { Button, NumberField, Panel, Switch } from './parts/primitives';
+import { Button, NumberField, Panel, Segmented, Switch } from './parts/primitives';
 import { Icon } from './icons';
+
+function loadNotes(projectId: string): string {
+  try {
+    return localStorage.getItem(`sew:notes:${projectId}`) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveNotes(projectId: string, text: string): void {
+  try {
+    localStorage.setItem(`sew:notes:${projectId}`, text);
+  } catch {
+    // ignorieren im privaten Modus
+  }
+}
 
 export function ProjectView(): JSX.Element {
   const project = useStore((s) => s.project);
@@ -22,9 +38,14 @@ export function ProjectView(): JSX.Element {
   const newProject = useStore((s) => s.newProject);
   const importProject = useStore((s) => s.importProject);
   const exportProject = useStore((s) => s.exportProject);
+  const setStartOpen = useStore((s) => s.setStartOpen);
   const toast = useStore((s) => s.toast);
   const fileRef = useRef<HTMLInputElement>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string>(() => loadNotes(project.id));
+  useEffect(() => {
+    setNotes(loadNotes(project.id));
+  }, [project.id]);
 
   const onImport = async (file: File): Promise<void> => {
     try {
@@ -48,6 +69,9 @@ export function ProjectView(): JSX.Element {
             </p>
           </div>
           <div className="doc-actions">
+            <Button variant="outline" icon="sparkle" onClick={() => setStartOpen(true)}>
+              {t('top.wizard')}
+            </Button>
             <Button variant="outline" icon="save" onClick={save}>
               {t('proj.save')}
             </Button>
@@ -130,6 +154,7 @@ export function ProjectView(): JSX.Element {
               max={LIMITS.baseWidthMm.max}
               step={5}
               unit="mm"
+              displayUnit={project.settings.unit}
               slider
               onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, widthMm: v } }))}
             />
@@ -140,6 +165,7 @@ export function ProjectView(): JSX.Element {
               max={LIMITS.baseHeightMm.max}
               step={5}
               unit="mm"
+              displayUnit={project.settings.unit}
               slider
               onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, heightMm: v } }))}
             />
@@ -150,6 +176,7 @@ export function ProjectView(): JSX.Element {
               max={LIMITS.spineWidthMm.max}
               step={2}
               unit="mm"
+              displayUnit={project.settings.unit}
               onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, spineWidthMm: v } }))}
             />
             <NumberField
@@ -159,15 +186,26 @@ export function ProjectView(): JSX.Element {
               max={LIMITS.cornerRadiusMm.max}
               step={2}
               unit="mm"
+              displayUnit={project.settings.unit}
               onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, cornerRadiusMm: v } }))}
             />
             <Switch label={t('proj.lining')} checked={project.base.hasLining} onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, hasLining: v } }))} />
+            <Segmented
+              label={t('props.unit')}
+              value={project.settings.unit}
+              options={[
+                { value: 'mm', label: t('props.unitMm') },
+                { value: 'cm', label: t('props.unitCm') },
+              ]}
+              onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, unit: v === 'cm' ? 'cm' : 'mm' } }))}
+            />
             <NumberField
               label={t('proj.seam')}
               value={project.settings.seamAllowanceMm}
               min={4}
               max={20}
               unit="mm"
+              displayUnit={project.settings.unit}
               onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, seamAllowanceMm: v } }))}
             />
             <NumberField
@@ -177,6 +215,7 @@ export function ProjectView(): JSX.Element {
               max={LIMITS.fabricWidthMm.max}
               step={10}
               unit="mm"
+              displayUnit={project.settings.unit}
               slider
               onChange={(v) => setPar((p) => ({ ...p, settings: { ...p.settings, fabricWidthMm: v } }))}
             />
@@ -214,6 +253,19 @@ export function ProjectView(): JSX.Element {
                   <div className="stat-sub">%</div>
                 </div>
               </div>
+            </Panel>
+            <Panel title={t('proj.notes')}>
+              <textarea
+                className="project-notes"
+                rows={4}
+                value={notes}
+                placeholder={t('proj.notesPlaceholder')}
+                aria-label={t('proj.notes')}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  saveNotes(project.id, e.target.value);
+                }}
+              />
             </Panel>
             <Panel title="Technisch">
               <div className="kv">
