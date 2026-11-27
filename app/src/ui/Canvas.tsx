@@ -45,6 +45,9 @@ interface DragState {
   clientY: number;
   moduleId?: string;
   rowId?: string;
+  paramKey?: string;
+  startParam?: number;
+  swapped?: boolean;
   startW?: number;
   startH?: number;
   startIndex?: number;
@@ -74,8 +77,13 @@ export function Canvas(): JSX.Element {
   const duplicate = useStore((s) => s.duplicate);
   const remove = useStore((s) => s.remove);
   const rotate = useStore((s) => s.rotate);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
+  const canUndo = useStore((s) => s.past.length > 0);
+  const canRedo = useStore((s) => s.future.length > 0);
 
   const wrapRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [dragPreview, setDragPreview] = useState<{ id: string; dx: number; dy: number } | null>(null);
@@ -141,6 +149,16 @@ export function Canvas(): JSX.Element {
   // ── Koordinaten ───────────────────────────────────────────────────────────
   const toWorld = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } => {
+      const svg = svgRef.current;
+      if (svg) {
+        const r = svg.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          return {
+            x: ((clientX - r.left) / r.width) * worldW - PAD,
+            y: ((clientY - r.top) / r.height) * worldH - PAD,
+          };
+        }
+      }
       const el = wrapRef.current;
       if (!el) return { x: 0, y: 0 };
       const rect = el.getBoundingClientRect();
@@ -148,7 +166,7 @@ export function Canvas(): JSX.Element {
       const py = clientY - rect.top - session.panY;
       return { x: px / scale - PAD, y: py / scale - PAD };
     },
-    [scale, session.panX, session.panY],
+    [scale, session.panX, session.panY, worldH, worldW],
   );
 
   // ── Auswahl-Hilfen ────────────────────────────────────────────────────────
@@ -236,6 +254,11 @@ export function Canvas(): JSX.Element {
     const placed = c.modules.find((m) => m.instanceId === id);
     const inst = project.modules.find((m) => m.id === id);
     if (!placed || !inst) return;
+    const swapped = inst.rotation % 180 === 90;
+    const map = RESIZE[inst.typeId];
+    const key = (axis === 'w') !== swapped ? map.w : map.h;
+    if (!key) return;
+    const startParam = typeof inst.params[key] === 'number' ? (inst.params[key] as number) : 0;
     const w = toWorld(e.clientX, e.clientY);
     dragRef.current = {
       kind: axis === 'w' ? 'resize-w' : 'resize-h',
@@ -244,6 +267,9 @@ export function Canvas(): JSX.Element {
       clientX: e.clientX,
       clientY: e.clientY,
       moduleId: id,
+      paramKey: key,
+      startParam,
+      swapped,
       startW: placed.rect.w,
       startH: placed.rect.h,
       pushed: false,
@@ -318,27 +344,26 @@ export function Canvas(): JSX.Element {
       return;
     }
 
-    if ((d.kind === 'resize-w' || d.kind === 'resize-h') && d.moduleId) {
+    if ((d.kind === 'resize-w' || d.kind === 'resize-h') && d.moduleId && d.paramKey && d.startParam !== undefined) {
       const inst = project.modules.find((m) => m.id === d.moduleId);
       if (!inst) return;
-      const map = RESIZE[inst.typeId];
-      const key = d.kind === 'resize-w' ? map.w : map.h;
-      if (!key) return;
+      const key = d.paramKey;
       const field = moduleDef(inst.typeId).fields.find((f) => f.key === key);
       const min = field?.min ?? 5;
       const max = field?.max ?? 400;
       const cur = typeof inst.params[key] === 'number' ? (inst.params[key] as number) : 0;
 
-      if (d.kind === 'resize-h' && inst.typeId === 'M07') {
+      if (inst.typeId === 'M07' && key === 'laenge') {
         // Lasche: die Höhe der Darstellung ist halbe Länge
-        const delta = (w.y - d.startY) * 2;
-        const next = clamp(Math.round((cur + delta) / 5) * 5, min, max);
+        const rawDelta = d.kind === 'resize-w' ? w.x - d.startX : w.y - d.startY;
+        const delta = rawDelta * 2;
+        const next = clamp(Math.round((d.startParam + delta) / 5) * 5, min, max);
         if (next !== cur) setPar((p) => ({ ...p, modules: p.modules.map((m) => (m.id === inst.id ? { ...m, params: { ...m.params, [key]: next } } : m)) }), { undoable: !d.pushed });
         d.pushed = true;
         return;
       }
       const delta = d.kind === 'resize-w' ? w.x - d.startX : w.y - d.startY;
-      const raw = cur + delta;
+      const raw = d.startParam + delta;
       const step = field?.step ?? 1;
       const next = clamp(Math.round(raw / step) * step, min, max);
       if (next !== cur) {
@@ -388,6 +413,10 @@ export function Canvas(): JSX.Element {
         <div className="floating" style={{ marginLeft: 4 }}>
           <Button icon="grid" active={session.grid} onClick={toggleGrid} title={t('canvas.grid')} />
           <Button icon="magnet" active={session.snap} onClick={toggleSnap} title={t('canvas.snap')} />
+        </div>
+        <div className="floating mobile-only" style={{ marginLeft: 4 }}>
+          <Button icon="undo" onClick={undo} disabled={!canUndo} title={t('top.undo')} />
+          <Button icon="redo" onClick={redo} disabled={!canRedo} title={t('top.redo')} />
         </div>
         <div style={{ flex: 1 }} />
         {selected.length === 1 ? (
@@ -440,6 +469,7 @@ export function Canvas(): JSX.Element {
           }}
         >
           <svg
+            ref={svgRef}
             className="canvas-svg"
             width={worldW * scale}
             height={worldH * scale}
@@ -489,12 +519,19 @@ export function Canvas(): JSX.Element {
                   <rect
                     x={project.base.widthMm}
                     y={0}
-                    width={project.base.spineWidthMm}
+                    width={Math.min(project.base.spineWidthMm, PAD - 4)}
                     height={c.flap.h}
                     className="spine"
-                    clipPath="url(#flap-clip)"
+                    opacity={0.75}
                   />
-                  <text x={project.base.widthMm + project.base.spineWidthMm / 2} y={-6} className="measure measure-strong" textAnchor="middle">
+                  <line
+                    x1={project.base.widthMm}
+                    y1={4}
+                    x2={project.base.widthMm}
+                    y2={c.flap.h - 4}
+                    className="fold-line"
+                  />
+                  <text x={project.base.widthMm + Math.min(project.base.spineWidthMm, PAD - 4) / 2} y={-6} className="measure measure-strong" textAnchor="middle">
                     Bund {project.base.spineWidthMm}
                   </text>
                 </g>
@@ -543,14 +580,10 @@ export function Canvas(): JSX.Element {
               const dx = preview ? preview.dx : 0;
               const dy = preview ? preview.dy : 0;
               const resizable = RESIZE[m.typeId];
-              const canW = resizable.w !== null;
-              const canH = resizable.h !== null;
-              // Drehung als echte Transformation um den Modulmittelpunkt:
-              // Verschieben bleibt Verschieben, die Fläche dreht sich mit Inhalt.
-              // `m.rect` ist der belegte (gedrehte) Kasten; gezeichnet wird in den
-              // ungedrehten Maßen, zentriert im Kasten, und dann gedreht.
               const rot = m.rotation % 360;
               const swapped = rot % 180 === 90;
+              const canW = (swapped ? resizable.h : resizable.w) !== null;
+              const canH = (swapped ? resizable.w : resizable.h) !== null;
               const drawW = swapped ? m.rect.h : m.rect.w;
               const drawH = swapped ? m.rect.w : m.rect.h;
               const boxX = m.rect.x + (m.rect.w - drawW) / 2;
@@ -638,6 +671,7 @@ export function Canvas(): JSX.Element {
                           height={4}
                           rx={1.5}
                           className="scale-handle"
+                          style={{ cursor: 'ns-resize' }}
                           onPointerDown={(e) => onResizePointerDown(e, m.instanceId, 'h')}
                           aria-label="Höhe ändern"
                         />

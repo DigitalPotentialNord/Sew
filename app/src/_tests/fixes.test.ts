@@ -82,4 +82,15 @@ describe('applyFix', () => {
     const next = applyFix(base, { kind: 'widenBase', toMm: 260 });
     expect(next.updatedAt).toBe(base.updatedAt);
   });
+
+  it('klemmt setParam an die Feldgrenzen und ignoriert gefährliche Keys', () => {
+    const inst = makeInstance('M01', 'r1');
+    const p = { ...base, modules: [inst] };
+    const clampedHi = applyFix(p, { kind: 'setParam', moduleId: inst.id, key: 'breite', value: 9999 });
+    expect(clampedHi.modules[0]!.params['breite']).toBe(260);
+    const clampedLo = applyFix(p, { kind: 'setParam', moduleId: inst.id, key: 'breite', value: 1 });
+    expect(clampedLo.modules[0]!.params['breite']).toBe(20);
+    const protoSafe = applyFix(p, { kind: 'setParam', moduleId: inst.id, key: '__proto__', value: 123 });
+    expect(protoSafe).toBe(p);
+  });
 });

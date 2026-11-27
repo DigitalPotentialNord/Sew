@@ -213,4 +213,28 @@ describe('Store: Toasts', () => {
     vi.advanceTimersByTime(3300);
     expect(useStore.getState().toasts).toEqual([]);
   });
+
+  it('propsOpen startet standardmäßig geschlossen (verhindert unerwünschtes Sheet auf Mobilgeräten)', () => {
+    expect(initial.session.propsOpen).toBe(false);
+  });
+
+  it('moveModule verschiebt zwischen Zeilen, aktualisiert Reihenfolge und ist per Undo umkehrbar', () => {
+    const s0 = useStore.getState();
+    const first = s0.project.modules[0]!;
+    const targetRow = s0.project.rows[1]!.id;
+    s0.moveModule(first.id, targetRow, 0);
+    const moved = useStore.getState().project.modules.find((m) => m.id === first.id)!;
+    expect(moved.rowId).toBe(targetRow);
+    useStore.getState().undo();
+    const restored = useStore.getState().project.modules.find((m) => m.id === first.id)!;
+    expect(restored.rowId).toBe(first.rowId);
+  });
+
+  it('rotate dreht in 90°-Schritten zurück auf 0°', () => {
+    const id = useStore.getState().project.modules[0]!.id;
+    for (const expected of [90, 180, 270, 0] as const) {
+      useStore.getState().rotate(id);
+      expect(useStore.getState().project.modules.find((m) => m.id === id)!.rotation).toBe(expected);
+    }
+  });
 });

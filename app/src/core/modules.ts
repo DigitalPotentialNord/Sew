@@ -107,8 +107,11 @@ const M01: ModuleDef = {
     const einschlag = str(p, 'saum') === 'einschlag';
     return [
       {
-        ...base(nz, 'fach', 'piece.fach', w + 2 * nz, h + sb + 2 * nz, 'fabric'),
-        foldEdge: einschlag ? 'left' : 'none',
+        ...base(nz, 'fach', 'piece.fach', w + 2 * nz, h + sb + 2 * nz, 'fabric', {
+          netH: mm(h),
+          netY: mm(sb + nz),
+        }),
+        foldEdge: einschlag ? 'top' : 'none',
         noteKey: einschlag ? 'note.einschlag' : 'note.saum',
       },
       base(0, 'fach-einlage', 'piece.fach-einlage', w, h, 'interfacing', { grain: 'crosswise', noteKey: 'note.einlage' }),
@@ -212,13 +215,16 @@ const M02: ModuleDef = {
     const sections = Math.max(1, num(p, 'sections', 3));
     return [
       {
-        ...base(nz, 'fach-geteilt', 'piece.fach-geteilt', w + 2 * nz, h + 10 + 2 * nz, 'fabric'),
+        ...base(nz, 'fach-geteilt', 'piece.fach-geteilt', w + 2 * nz, h + 10 + 2 * nz, 'fabric', {
+          netH: mm(h),
+          netY: mm(10 + nz),
+        }),
         noteKey: 'note.teilungsnaehte',
         count: 1,
         foldEdge: 'bottom',
       },
       {
-        ...base(nz, 'fach-teilung', 'piece.fach-teilung', w + 2 * nz, 40, 'fabric'),
+        ...base(nz, 'fach-teilung', 'piece.fach-teilung', w + 2 * nz, 20 + 2 * nz, 'fabric'),
         count: sections - 1,
         grain: 'crosswise',
         noteKey: 'note.teilungsstreifen',
@@ -418,9 +424,10 @@ const M04: ModuleDef = {
     const loops = Math.max(1, num(p, 'loops', 6));
     const gl = loopLength(p);
     const bandLen = Math.round(loops * gl + 2 * nz + 2 * PRACTICE.elasticTailMm);
+    const carrierNetH = Math.max(40, Math.round(num(p, 'bandbreite', 12) + 28));
     return [
       {
-        ...base(nz, 'elastik-traeger', 'piece.elastik-traeger', w + 2 * nz, 60, 'fabric'),
+        ...base(nz, 'elastik-traeger', 'piece.elastik-traeger', w + 2 * nz, carrierNetH + 2 * nz, 'fabric'),
         noteKey: 'note.elastik-traeger',
       },
       lengthPiece('elastik-band', 'piece.elastik-band', bandLen, 'elastic', 'exact', 'note.elastik-laenge'),
@@ -544,18 +551,19 @@ const M05: ModuleDef = {
       },
     ];
   },
-  extraMaterials: (p) => {
+  extraMaterials: (p, ctx) => {
     const anzahl = Math.max(1, num(p, 'anzahl', 1));
+    const nz = ctx.seamAllowanceMm;
     return [
       {
         kind: 'webbing',
         spec: `gurtband-${Math.round(num(p, 'bandbreite', 20))}mm`,
         labelKey: 'mat.gurtband',
-        amount: Math.round(anzahl * (num(p, 'umfang', 70) + 20)),
+        amount: Math.round(anzahl * (num(p, 'umfang', 70) + 2 * nz)),
         unit: 'mm',
         certainty: 'exact',
         basisKey: 'basis.gurtband',
-        basisValues: { anzahl, umfang: Math.round(num(p, 'umfang', 70)) },
+        basisValues: { anzahl, umfang: Math.round(num(p, 'umfang', 70)), nz },
       },
     ];
   },
@@ -638,7 +646,10 @@ const M06: ModuleDef = {
     const anzahl = Math.max(1, num(p, 'paare', 1));
     const out: PieceSpec[] = [
       {
-        ...base(nz, 'kanal', 'piece.kanal', w + 2 * nz, h + nz, 'fabric'),
+        ...base(nz, 'kanal', 'piece.kanal', w + 2 * nz, h + 10 + nz, 'fabric', {
+          netH: mm(h),
+          netY: mm(10),
+        }),
         noteKey: 'note.kanal-fadenlauf',
       },
       {
@@ -931,8 +942,8 @@ const M09: ModuleDef = {
     return out;
   },
   operations: (p, _ctx, id) => [
-    { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.quilt-padding', values: { ringe: Math.round(num(p, 'ringe', 6)) } },
     { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-rings', values: { ringe: Math.round(num(p, 'ringe', 6)) } },
+    { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.quilt-padding', values: { ringe: Math.round(num(p, 'ringe', 6)) } },
   ],
   validate: (p, ctx, id) => {
     const out: Finding[] = [];
@@ -1000,22 +1011,17 @@ const M10: ModuleDef = {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 110);
     const h = num(p, 'hoehe', 45);
-    return [base(nz, 'ohrring-leiste', 'piece.ohrring-leiste', w + 2 * nz, h + 2 * nz, 'fabric', { noteKey: 'note.ohrring' })];
+    return [
+      base(nz, 'ohrring-leiste', 'piece.ohrring-leiste', w + 2 * nz, h + 2 * nz, 'fabric', {
+        count: 2,
+        noteKey: 'note.ohrring',
+      }),
+      base(0, 'ohrring-einlage', 'piece.ohrring-einlage', w, h, 'interfacing', {
+        count: 2,
+        noteKey: 'note.einlage',
+      }),
+    ];
   },
-  extraMaterials: (p) => [
-    {
-      kind: 'interfacing',
-      spec: 'h250',
-      labelKey: 'mat.verstaerkung',
-      // m² mit vier Nachkommastellen: 106 × 46 mm sind 0,005 m² — auf drei
-      // Stellen gerundet wäre das 0,000 und damit »nicht vorhanden«.
-      amount: (num(p, 'breite', 110) * num(p, 'hoehe', 45)) / 1e6,
-      unit: 'm2',
-      certainty: 'exact',
-      basisKey: 'basis.verstaerkung',
-      basisValues: { breite: Math.round(num(p, 'breite', 110)), hoehe: Math.round(num(p, 'hoehe', 45)) },
-    },
-  ],
   operations: (_p, _ctx, id) => [
     { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-earring', values: { lagen: 2 } },
     { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-holes', values: { paare: Math.round(num(_p, 'paare', 7)) } },
@@ -1085,9 +1091,10 @@ const M11: ModuleDef = {
     const nz = ctx.seamAllowanceMm;
     const w = num(p, 'breite', 130);
     const h = num(p, 'hoehe', 120);
+    const pocketH = Math.min(40, Math.round(h * 0.45));
     return [
       base(nz, 'ketten-panel', 'piece.ketten-panel', w + 2 * nz, h + 2 * nz, 'fabric', { noteKey: 'note.ketten' }),
-      base(nz, 'ketten-tasche', 'piece.ketten-tasche', w + 2 * nz, 60, 'fabric', { noteKey: 'note.ketten-tasche' }),
+      base(nz, 'ketten-tasche', 'piece.ketten-tasche', w + 2 * nz, pocketH + 2 * nz, 'fabric', { noteKey: 'note.ketten-tasche' }),
     ];
   },
   extraMaterials: (p) => [
@@ -1102,11 +1109,15 @@ const M11: ModuleDef = {
       basisValues: { haken: Math.round(num(p, 'haken', 5)) },
     },
   ],
-  operations: (p, _ctx, id) => [
-    { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-hooks', values: { haken: Math.round(num(p, 'haken', 5)) } },
-    { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-hook-tape', values: { haken: Math.round(num(p, 'haken', 5)) } },
-    { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-chain-pocket', values: { hoehe: 60 } },
-  ],
+  operations: (p, _ctx, id) => {
+    const h = num(p, 'hoehe', 120);
+    const pocketH = Math.min(40, Math.round(h * 0.45));
+    return [
+      { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-hooks', values: { haken: Math.round(num(p, 'haken', 5)) } },
+      { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-hook-tape', values: { haken: Math.round(num(p, 'haken', 5)) } },
+      { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-chain-pocket', values: { hoehe: pocketH } },
+    ];
+  },
   validate: (p, ctx, id) => {
     const out: Finding[] = [];
     const w = num(p, 'breite', 130);
@@ -1135,13 +1146,14 @@ const M11: ModuleDef = {
   draw: (p, w, h) => {
     const haken = Math.max(1, num(p, 'haken', 5));
     const step = w / haken;
+    const pocketH = Math.min(40, Math.round(h * 0.45));
     const prims: Prim[] = [{ t: 'rect', x: 0, y: 0, w, h, style: 'pocket' }];
     for (let i = 0; i < haken; i++) {
       const x = step * (i + 0.5);
       prims.push({ t: 'circle', cx: x, cy: 18, r: 4, style: 'ring' });
       prims.push({ t: 'line', x1: x, y1: 18, x2: x, y2: h * 0.55, style: 'guide' });
     }
-    prims.push({ t: 'line', x1: 0, y1: h - 60, x2: w, y2: h - 60, style: 'seam' });
+    prims.push({ t: 'line', x1: 0, y1: h - pocketH, x2: w, y2: h - pocketH, style: 'seam' });
     return prims;
   },
   summary: (p) => `${num(p, 'haken', 5)} Haken + Tasche`,
@@ -1174,9 +1186,14 @@ const M12: ModuleDef = {
     const schraeg = bool(p, 'schraeg', true);
     return [
       base(nz, 'werkzeug-fach', 'piece.werkzeug-fach', w + 2 * nz, h + 20 + 2 * nz, 'fabric', {
+        netH: mm(h),
+        netY: mm(20 + nz),
         noteKey: schraeg ? 'note.schraeg' : 'note.gerade',
       }),
-      base(nz, 'werkzeug-beleg', 'piece.werkzeug-beleg', w + 2 * nz, 40, 'fabric', { grain: 'crosswise', noteKey: 'note.beleg' }),
+      base(nz, 'werkzeug-beleg', 'piece.werkzeug-beleg', w + 2 * nz, 20 + 2 * nz, 'fabric', {
+        grain: 'crosswise',
+        noteKey: 'note.beleg',
+      }),
     ];
   },
   operations: (p, _ctx, id) => {
@@ -1444,7 +1461,7 @@ const M16: ModuleDef = {
       base(nz, 'scheren-fach', 'piece.scheren-fach', num(p, 'breite', 60) + 2 * nz, num(p, 'laenge', 180) + 2 * nz, 'fabric', {
         noteKey: 'note.schere',
       }),
-      base(0, 'scheren-einlage', 'piece.scheren-einlage', num(p, 'breite', 60), num(p, 'laenge', 180) * 0.5, 'interfacing', {
+      base(0, 'scheren-einlage', 'piece.scheren-einlage', num(p, 'breite', 60), Math.round(num(p, 'laenge', 180) * 0.5), 'interfacing', {
         noteKey: 'note.einlage',
       }),
     ];

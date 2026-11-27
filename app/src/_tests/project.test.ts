@@ -435,3 +435,25 @@ describe('applyFix lässt den Zeitstempel in Ruhe', () => {
     expect(q.updatedAt.startsWith('1970')).toBe(false);
   });
 });
+
+describe('Security & Boundary-Validierung', () => {
+  it('lehnt Prototype-Pollution-Keys (__proto__, constructor, prototype) ab', () => {
+    const p = blankProject();
+    const m = makeInstance('M01', 'r1');
+    const polluted = JSON.parse(`{"schemaVersion":2,"id":"p1","name":"X","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","base":${JSON.stringify(p.base)},"rows":${JSON.stringify(p.rows)},"modules":[{"id":"m1","typeId":"M01","rowId":"r1","params":{"breite":70,"hoehe":70,"__proto__":1},"rotation":0,"locked":false}],"settings":${JSON.stringify(p.settings)}}`);
+    expect(validateProject(polluted).ok).toBe(false);
+    const up = updateParams({ ...p, modules: [m] }, m.id, 'constructor', 99);
+    expect(Object.hasOwn(up.modules[0]!.params, 'constructor')).toBe(false);
+  });
+
+  it('lehnt zukünftige Schema-Versionen, NaN/out-of-range Parameter und count < 1 ab', () => {
+    const p = blankProject();
+    expect(validateProject({ ...p, schemaVersion: 99 }).ok).toBe(false);
+    const m = makeInstance('M04', 'r1', { loops: 0 });
+    expect(validateProject({ ...p, modules: [m] }).ok).toBe(false);
+    const mNeg = makeInstance('M01', 'r1', { breite: -5 });
+    expect(validateProject({ ...p, modules: [mNeg] }).ok).toBe(false);
+    const mHuge = makeInstance('M01', 'r1', { breite: 5001 });
+    expect(validateProject({ ...p, modules: [mHuge] }).ok).toBe(false);
+  });
+});

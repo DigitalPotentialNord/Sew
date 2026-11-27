@@ -141,8 +141,8 @@ export function ProjectView(): JSX.Element {
             <NumberField
               label={t('proj.spine')}
               value={project.base.spineWidthMm}
-              min={0}
-              max={90}
+              min={LIMITS.spineWidthMm.min}
+              max={LIMITS.spineWidthMm.max}
               step={2}
               unit="mm"
               onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, spineWidthMm: v } }))}
@@ -150,8 +150,8 @@ export function ProjectView(): JSX.Element {
             <NumberField
               label={t('proj.radius')}
               value={project.base.cornerRadiusMm}
-              min={0}
-              max={60}
+              min={LIMITS.cornerRadiusMm.min}
+              max={LIMITS.cornerRadiusMm.max}
               step={2}
               unit="mm"
               onChange={(v) => setPar((p) => ({ ...p, base: { ...p.base, cornerRadiusMm: v } }))}
@@ -244,54 +244,56 @@ export function ProjectView(): JSX.Element {
               {t('proj.noProjects')}
             </p>
           ) : (
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Gespeichert</th>
-                  <th style={{ textAlign: 'right' }}>Aktion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {library.map((s) => (
-                  <tr key={s.id}>
-                    <td style={{ fontWeight: 500 }}>{s.name}</td>
-                    <td style={{ color: 'var(--ink-2)' }}>{new Date(s.updatedAt).toLocaleString('de-DE')}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <Button size="sm" variant="outline" onClick={() => loadStored(s.id)}>
-                        {t('proj.open')}
-                      </Button>{' '}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => duplicateStored(s.id)}
-                      >
-                        {t('proj.duplicate')}
-                      </Button>{' '}
-                      {confirmId === s.id ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => {
-                              removeStored(s.id);
-                              setConfirmId(null);
-                            }}
-                          >
-                            {t('proj.confirmDelete')}
-                          </Button>
-                          <Button size="sm" onClick={() => setConfirmId(null)}>
-                            ✕
-                          </Button>
-                        </>
-                      ) : (
-                        <Button size="sm" variant="danger" icon="trash" onClick={() => setConfirmId(s.id)} />
-                      )}
-                    </td>
+            <div className="table-scroll">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Gespeichert</th>
+                    <th style={{ textAlign: 'right' }}>Aktion</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {library.map((s) => (
+                    <tr key={s.id}>
+                      <td style={{ fontWeight: 500 }}>{s.name}</td>
+                      <td style={{ color: 'var(--ink-2)' }}>{new Date(s.updatedAt).toLocaleString('de-DE')}</td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <Button size="sm" variant="outline" onClick={() => loadStored(s.id)}>
+                          {t('proj.open')}
+                        </Button>{' '}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => duplicateStored(s.id)}
+                        >
+                          {t('proj.duplicate')}
+                        </Button>{' '}
+                        {confirmId === s.id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => {
+                                removeStored(s.id);
+                                setConfirmId(null);
+                              }}
+                            >
+                              {t('proj.confirmDelete')}
+                            </Button>
+                            <Button size="sm" onClick={() => setConfirmId(null)}>
+                              ✕
+                            </Button>
+                          </>
+                        ) : (
+                          <Button size="sm" variant="danger" icon="trash" onClick={() => setConfirmId(s.id)} />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Panel>
 
@@ -309,23 +311,28 @@ export function ProjectView(): JSX.Element {
 }
 
 function TemplateThumb({ project }: { project: { base: { widthMm: number; heightMm: number; spineWidthMm: number }; modules: readonly { typeId: string }[] } }): JSX.Element {
-  const w = project.base.widthMm + (project.base.spineWidthMm || 0);
+  const halfW = project.base.widthMm;
+  const spine = project.base.spineWidthMm || 0;
+  const w = 2 * halfW + spine;
   const h = project.base.heightMm;
   const s = Math.min(228 / w, 60 / h);
   const rows = Math.min(3, Math.max(1, Math.ceil(project.modules.length / 3)));
   return (
-    <svg width={w * s} height={h * s} viewBox={`0 0 ${w} ${h}`} style={{ margin: '4px auto', display: 'block' }} aria-hidden="true">
+    <svg width={w * s} height={h * s} viewBox={`0 0 ${w} ${h}`} style={{ margin: '4px auto', display: 'block', maxWidth: '100%' }} aria-hidden="true">
       <rect x={0} y={0} width={w} height={h} rx={8} fill="#fff" stroke="var(--ink-3)" strokeWidth={1.2} />
+      {spine > 0 ? <rect x={halfW} y={1} width={spine} height={h - 2} fill="var(--surface-3)" /> : null}
+      <line x1={halfW} y1={2} x2={halfW} y2={h - 2} stroke="var(--line-strong)" strokeWidth={1} strokeDasharray="3 2" />
+      <line x1={halfW + spine} y1={2} x2={halfW + spine} y2={h - 2} stroke="var(--line-strong)" strokeWidth={1} strokeDasharray="3 2" />
       {project.modules.slice(0, 9).map((_m, i) => {
         const col = i % 3;
         const row = Math.floor(i / 3);
-        const cellW = w / 3 - 6;
-        const cellH = h / rows - 6;
+        const cellW = (halfW - 16) / 3;
+        const cellH = (h - 12) / rows - 4;
         return (
           <rect
             key={i}
-            x={4 + col * (cellW + 2)}
-            y={4 + row * (cellH + 2)}
+            x={8 + col * (cellW + 2)}
+            y={6 + row * (cellH + 4)}
             width={cellW}
             height={Math.max(4, cellH)}
             rx={2}

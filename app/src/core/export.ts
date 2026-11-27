@@ -18,19 +18,43 @@ const asMm = (n: number): Mm => n as Mm;
 
 function pieceGroup(piece: ComputedPiece, x: number, y: number): string {
   const r: Rect = { x: asMm(x), y: asMm(y), w: piece.w, h: piece.h };
-  const nz = Math.max(0, Math.round((piece.w - piece.netW) / 2));
-  const net: Rect = { x: asMm(x + nz), y: asMm(y + nz), w: piece.netW, h: piece.netH };
-  const grainX = x + piece.w / 2;
+  const nx = piece.netRect.x;
+  const ny = piece.netRect.y;
+  const hasSA = piece.netW < piece.w || piece.netH < piece.h;
+  const net: Rect = { x: asMm(x + nx), y: asMm(y + ny), w: piece.netW, h: piece.netH };
+  const netRadius = Math.max(0, piece.radius - Math.min(nx, ny));
   const parts: string[] = [];
   const label = escapeHtml(piece.id);
   parts.push(`<g id="piece-${label}" data-piece="${label}" data-count="${piece.count}" data-material="${piece.material}">`);
   parts.push(`<path d="${roundedRectPath(r, piece.radius)}" class="cut" ${STYLE.cut}/>`);
-  parts.push(`<path d="${roundedRectPath(net, 0)}" class="sew" ${STYLE.sew}/>`);
-  parts.push(`<path d="M${grainX},${y + 8} V${y + piece.h - 8}" class="grain" ${STYLE.grain}/>`);
-  parts.push(`<path d="M${grainX - 3},${y + 13} L${grainX},${y + 8} L${grainX + 3},${y + 13}" ${STYLE.grain}/>`);
+  if (hasSA) {
+    parts.push(`<path d="${roundedRectPath(net, netRadius)}" class="sew" ${STYLE.sew}/>`);
+  }
+  if (piece.grain === 'crosswise') {
+    const gy = y + piece.h / 2;
+    const gx0 = x + Math.min(8, piece.w * 0.15);
+    const gx1 = x + piece.w - Math.min(8, piece.w * 0.15);
+    if (gx1 > gx0 + 6) {
+      parts.push(`<path d="M${gx0},${gy} H${gx1}" class="grain" ${STYLE.grain}/>`);
+      parts.push(`<path d="M${gx1 - 4},${gy - 2.5} L${gx1},${gy} L${gx1 - 4},${gy + 2.5}" ${STYLE.grain}/>`);
+    }
+  } else if (piece.grain === 'lengthwise') {
+    const grainX = x + piece.w / 2;
+    const gy0 = y + Math.min(8, piece.h * 0.15);
+    const gy1 = y + piece.h - Math.min(8, piece.h * 0.15);
+    if (gy1 > gy0 + 6) {
+      parts.push(`<path d="M${grainX},${gy0} V${gy1}" class="grain" ${STYLE.grain}/>`);
+      parts.push(`<path d="M${grainX - 3},${gy0 + 5} L${grainX},${gy0} L${grainX + 3},${gy0 + 5}" ${STYLE.grain}/>`);
+    }
+  }
   if (piece.foldEdge && piece.foldEdge !== 'none') {
-    const fy = piece.foldEdge === 'bottom' ? y + piece.h : y;
-    parts.push(`<path d="M${x + 2},${fy} H${x + piece.w - 2}" class="fold" ${STYLE.fold}/>`);
+    if (piece.foldEdge === 'top' || piece.foldEdge === 'bottom') {
+      const fy = piece.foldEdge === 'bottom' ? y + piece.h : y;
+      parts.push(`<path d="M${x + 2},${fy} H${x + piece.w - 2}" class="fold" ${STYLE.fold}/>`);
+    } else {
+      const fx = piece.foldEdge === 'right' ? x + piece.w : x;
+      parts.push(`<path d="M${fx},${y + 2} V${y + piece.h - 2}" class="fold" ${STYLE.fold}/>`);
+    }
   }
   parts.push(
     `<text x="${x + piece.w / 2}" y="${y + piece.h / 2}" class="label" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="5" fill="#111">${escapeHtml(piece.id)} · ${piece.count}× · ${piece.w}×${piece.h} mm</text>`,
@@ -92,7 +116,8 @@ export interface Tile {
 
 export function tilePiece(piece: ComputedPiece): Tile[] {
   const usableW = PAGE.A4.w - 2 * PAGE.A4.margin - PAGE.A4.glue;
-  const usableH = PAGE.A4.h - 2 * PAGE.A4.margin - PAGE.A4.glue;
+  // 17 mm Reserve für Seitenkopf, Fußzeile und ggf. 10-mm-Klebekante oben
+  const usableH = PAGE.A4.h - 2 * PAGE.A4.margin - PAGE.A4.glue - 17;
   const cols = Math.max(1, Math.ceil(piece.w / usableW));
   const rows = Math.max(1, Math.ceil(piece.h / usableH));
   const out: Tile[] = [];
@@ -162,42 +187,44 @@ export function buildPrintHtml(
   materials: readonly PrintLine[],
   instructions: readonly { readonly index: number; readonly phase: string; readonly text: string }[],
   openWarnings: readonly string[],
+  options: { readonly instructionsOnly?: boolean } = {},
 ): string {
   const cut = c.pieces.filter((p) => p.kind === 'cut');
   const pages: string[] = [];
 
-  // Seite 1 — Deckblatt + Kalibrierung
-  pages.push(`<section class="page cover">
-    <div class="kicker">${s.projectLabel}</div>
+  if (!options.instructionsOnly) {
+    // Seite 1 — Deckblatt + Kalibrierung
+    pages.push(`<section class="page cover">
+    <div class="kicker">${escapeHtml(s.projectLabel)}</div>
     <h1>${escapeHtml(projectName)}</h1>
     <div class="meta">
-      <div><span>${s.size}</span><b>${c.flap.w} × ${c.flap.h} mm</b></div>
-      <div><span>${s.count}</span><b>${cut.length} ${s.piece}</b></div>
-      <div><span>${s.seamAllowance}</span><b>${c.pieces[0] ? Math.round((c.pieces[0].w - c.pieces[0].netW) / 2) : 0} mm</b></div>
+      <div><span>${escapeHtml(s.size)}</span><b>${c.flap.w} × ${c.flap.h} mm</b></div>
+      <div><span>${escapeHtml(s.count)}</span><b>${cut.length} ${escapeHtml(s.piece)}</b></div>
+      <div><span>${escapeHtml(s.seamAllowance)}</span><b>${c.pieces[0] ? Math.round((c.pieces[0].w - c.pieces[0].netW) / 2) : 0} mm</b></div>
     </div>
     <div class="calibrate">
       <div class="cal-box"></div>
       <div>
-        <b>${s.calibrationLabel}</b>
-        <p>${s.calibrationHint}</p>
+        <b>${escapeHtml(s.calibrationLabel)}</b>
+        <p>${escapeHtml(s.calibrationHint)}</p>
       </div>
     </div>
-    <div class="warn"><b>${s.warning}</b>${openWarnings.length ? `<ul>${openWarnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : ''}</div>
+    <div class="warn"><b>${escapeHtml(s.warning)}</b>${openWarnings.length ? `<ul>${openWarnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : ''}</div>
     <div class="footer">${escapeHtml(s.footer)}</div>
   </section>`);
 
-  // Seite 2 — Materialliste
-  pages.push(`<section class="page">
-    <h2>${s.materialLabel}</h2>
+    // Seite 2 — Materialliste
+    pages.push(`<section class="page">
+    <h2>${escapeHtml(s.materialLabel)}</h2>
     <table class="material">
-      <thead><tr><th>${s.materialLabel}</th><th>${s.size}</th><th></th><th>${s.grain}</th></tr></thead>
+      <thead><tr><th>${escapeHtml(s.materialLabel)}</th><th>${escapeHtml(s.size)}</th><th></th><th>${escapeHtml(s.grain)}</th></tr></thead>
       <tbody>
       ${materials
         .map(
           (m) => `<tr>
           <td>${escapeHtml(m.label)}</td>
           <td class="num">${escapeHtml(m.amount)}</td>
-          <td class="cert ${m.certainty === 'exact' ? 'exact' : 'est'}">${m.certainty === 'exact' ? s.materialExact : s.materialEstimated}</td>
+          <td class="cert ${m.certainty === 'exact' ? 'exact' : 'est'}">${escapeHtml(m.certainty === 'exact' ? s.materialExact : s.materialEstimated)}</td>
           <td class="basis">${escapeHtml(m.basis)}</td>
         </tr>`,
         )
@@ -206,58 +233,80 @@ export function buildPrintHtml(
     </table>
   </section>`);
 
-  // Seite 3 — Zuschnittübersicht
-  pages.push(`<section class="page">
-    <h2>${s.cutLabel}</h2>
-    <table class="cutlist">
-      <thead><tr><th>${s.piece}</th><th>${s.count}</th><th>${s.size}</th><th>${s.grain}</th></tr></thead>
-      <tbody>${cut
-        .map(
-          (p) =>
-            `<tr><td>${escapeHtml(p.id)}</td><td class="num">${p.count}×</td><td class="num">${p.w} × ${p.h} mm</td><td>${p.grain === 'lengthwise' ? 'längs' : p.grain === 'crosswise' ? 'quer' : '—'}</td></tr>`,
-        )
-        .join('')}</tbody>
-    </table>
-    <p class="hint">${s.legend}</p>
-  </section>`);
+    // Seite 3 — Zuschnittübersicht
+    pages.push(`<section class="page">
+      <h2>${escapeHtml(s.cutLabel)}</h2>
+      <table class="cutlist">
+        <thead><tr><th>${escapeHtml(s.piece)}</th><th>${escapeHtml(s.count)}</th><th>${escapeHtml(s.size)}</th><th>${escapeHtml(s.grain)}</th></tr></thead>
+        <tbody>${cut
+          .map(
+            (p) =>
+              `<tr><td>${escapeHtml(p.id)}</td><td class="num">${p.count}×</td><td class="num">${p.w} × ${p.h} mm</td><td>${p.grain === 'lengthwise' ? 'längs' : p.grain === 'crosswise' ? 'quer' : '—'}</td></tr>`,
+          )
+          .join('')}</tbody>
+      </table>
+      <p class="hint">${escapeHtml(s.legend)}</p>
+    </section>`);
 
-  // Seite 4 — Seitenübersicht / Klebematrix
-  const mapRows = cut.map((p) => {
-    const tiles = tilePiece(p);
-    return `<tr><td>${escapeHtml(p.id)}</td><td class="num">${p.w} × ${p.h} mm</td><td class="num">${tiles.map((t) => t.label).join(', ')}</td></tr>`;
-  });
-  pages.push(`<section class="page">
-    <h2>${s.pageMapLabel}</h2>
-    <table class="cutlist"><thead><tr><th>${s.piece}</th><th>${s.size}</th><th>${s.glue}</th></tr></thead>
-    <tbody>${mapRows.join('')}</tbody></table>
-  </section>`);
+    // Seite 4 — Seitenübersicht / Klebematrix
+    const mapRows = cut.map((p) => {
+      const tiles = tilePiece(p);
+      return `<tr><td>${escapeHtml(p.id)}</td><td class="num">${p.w} × ${p.h} mm</td><td class="num">${tiles.map((t) => t.label).join(', ')}</td></tr>`;
+    });
+    pages.push(`<section class="page">
+      <h2>${escapeHtml(s.pageMapLabel)}</h2>
+      <table class="cutlist"><thead><tr><th>${escapeHtml(s.piece)}</th><th>${escapeHtml(s.size)}</th><th>${escapeHtml(s.glue)}</th></tr></thead>
+      <tbody>${mapRows.join('')}</tbody></table>
+    </section>`);
 
-  // Tiled pages
-  for (const piece of cut) {
-    for (const tile of tilePiece(piece)) {
-      pages.push(`<section class="page tile">
-        <div class="tilehead"><b>${escapeHtml(piece.id)}</b><span>${tile.label} · ${tile.cols}×${tile.rows}</span></div>
-        <div class="tilebody">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="${tile.srcRect.x} ${tile.srcRect.y} ${tile.srcRect.w} ${tile.srcRect.h}" preserveAspectRatio="none" style="width:${tile.srcRect.w}mm;height:${tile.srcRect.h}mm">
-            <g transform="translate(0,0)">
-              <path d="${roundedRectPath({ x: asMm(0), y: asMm(0), w: piece.w, h: piece.h }, piece.radius)}" fill="none" stroke="#111" stroke-width="0.4"/>
-              <path d="M0,${Math.max(0, (piece.h - piece.netH) / 2)} H${piece.w}" fill="none" stroke="#999" stroke-width="0.25" stroke-dasharray="3 2"/>
-              <path d="M${piece.w / 2},4 V${piece.h - 4}" fill="none" stroke="#111" stroke-width="0.25"/>
-            </g>
-          </svg>
-        </div>
-        <div class="tilefoot">
-          <span>${s.glue}: ${tile.row > 0 ? `${String.fromCharCode(65 + tile.col)}${tile.row}` : ''} ${tile.row < tile.rows - 1 ? `→ ${String.fromCharCode(65 + tile.col)}${tile.row + 2}` : ''}</span>
-          <span>${tile.col > 0 ? `← ${String.fromCharCode(64 + tile.col)}${tile.row + 1}` : ''} ${tile.col < tile.cols - 1 ? `→ ${String.fromCharCode(66 + tile.col)}${tile.row + 1}` : ''}</span>
-        </div>
-        <div class="footer">${escapeHtml(s.footer)}</div>
-      </section>`);
+    // Tiled pages
+    for (const piece of cut) {
+      const hasSA = piece.netW < piece.w || piece.netH < piece.h;
+      const netRadius = Math.max(0, piece.radius - Math.min(piece.netRect.x, piece.netRect.y));
+      const foldLine =
+        piece.foldEdge === 'top'
+          ? `<path d="M2,0 H${piece.w - 2}" fill="none" stroke="#9a9a9a" stroke-width="0.3" stroke-dasharray="6 2 1 2"/>`
+          : piece.foldEdge === 'bottom'
+            ? `<path d="M2,${piece.h} H${piece.w - 2}" fill="none" stroke="#9a9a9a" stroke-width="0.3" stroke-dasharray="6 2 1 2"/>`
+            : piece.foldEdge === 'left'
+              ? `<path d="M0,2 V${piece.h - 2}" fill="none" stroke="#9a9a9a" stroke-width="0.3" stroke-dasharray="6 2 1 2"/>`
+              : piece.foldEdge === 'right'
+                ? `<path d="M${piece.w},2 V${piece.h - 2}" fill="none" stroke="#9a9a9a" stroke-width="0.3" stroke-dasharray="6 2 1 2"/>`
+                : '';
+      const grainLine =
+        piece.grain === 'crosswise'
+          ? `<path d="M8,${piece.h / 2} H${Math.max(12, piece.w - 8)}" fill="none" stroke="#111" stroke-width="0.25"/>`
+          : piece.grain === 'lengthwise'
+            ? `<path d="M${piece.w / 2},4 V${Math.max(8, piece.h - 4)}" fill="none" stroke="#111" stroke-width="0.25"/>`
+            : '';
+
+      for (const tile of tilePiece(piece)) {
+        pages.push(`<section class="page tile">
+          <div class="tilehead"><b>${escapeHtml(piece.id)} (${piece.count}×)</b><span>${tile.label} · ${tile.cols}×${tile.rows}</span></div>
+          <div class="tilebody">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="${tile.srcRect.x} ${tile.srcRect.y} ${tile.srcRect.w} ${tile.srcRect.h}" preserveAspectRatio="none" style="width:${tile.srcRect.w}mm;height:${tile.srcRect.h}mm">
+              <g transform="translate(0,0)">
+                <path d="${roundedRectPath({ x: asMm(0), y: asMm(0), w: piece.w, h: piece.h }, piece.radius)}" fill="none" stroke="#111" stroke-width="0.4"/>
+                ${hasSA ? `<path d="${roundedRectPath(piece.netRect, netRadius)}" fill="none" stroke="#8a8a8a" stroke-width="0.25" stroke-dasharray="3 2"/>` : ''}
+                ${foldLine}
+                ${grainLine}
+              </g>
+            </svg>
+          </div>
+          <div class="tilefoot">
+            <span>${escapeHtml(s.glue)}: ${tile.row > 0 ? `↑ ${String.fromCharCode(65 + tile.col)}${tile.row}` : ''} ${tile.row < tile.rows - 1 ? `↓ ${String.fromCharCode(65 + tile.col)}${tile.row + 2}` : ''}</span>
+            <span>${tile.col > 0 ? `← ${String.fromCharCode(64 + tile.col)}${tile.row + 1}` : ''} ${tile.col < tile.cols - 1 ? `→ ${String.fromCharCode(66 + tile.col)}${tile.row + 1}` : ''}</span>
+          </div>
+          <div class="footer">${escapeHtml(s.footer)}</div>
+        </section>`);
+      }
     }
   }
 
   // Anleitung
   pages.push(`<section class="page">
-    <h2>${s.instructionsLabel}</h2>
+    ${options.instructionsOnly ? `<div class="kicker">${escapeHtml(projectName)}</div>` : ''}
+    <h2>${escapeHtml(s.instructionsLabel)}</h2>
     <ol class="steps">
       ${instructions.map((i) => `<li><span class="ph">${escapeHtml(i.phase)}</span> ${escapeHtml(i.text)}</li>`).join('')}
     </ol>
@@ -307,7 +356,8 @@ export function escapeHtml(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export function downloadText(filename: string, mime: string, content: string | Uint8Array): void {

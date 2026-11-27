@@ -389,17 +389,57 @@ test.describe('9 — PDF-Datei und Drehung', () => {
 
   test('gedrehtes Modul bleibt im Raster und erzeugt keinen falschen Fehler', async ({ page }) => {
     await loadSchmuck(page);
-    const mod = page.locator('.canvas-svg g.mod').first();
+    const mod = page.locator('.canvas-svg g.mod').last();
     const before = await mod.boundingBox();
     await mod.click({ force: true });
     await page.keyboard.press('r');
     await expect
       .poll(async () => {
-        const b = await page.locator('.canvas-svg g.mod').first().boundingBox();
+        const b = await page.locator('.canvas-svg g.mod').last().boundingBox();
         return b ? Math.round(b.width) : 0;
       })
       .not.toBe(Math.round(before!.width));
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
+  });
+
+  test('Drehung mit realem Höhenüberlauf meldet Fehler und Fix behebt ihn', async ({ page }) => {
+    await loadSchmuck(page);
+    await page.locator('.canvas-svg g.mod').first().click({ force: true });
+    await page.keyboard.press('r');
+    await page.getByRole('button', { name: /Warnungen/i }).first().click();
+    await expect(page.locator('.pane.right .finding.error')).toHaveCount(2);
+    await page.locator('.pane.right .finding.error button').first().click();
+    await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
+  });
+
+  test('Ziehen an Skaliergriffen funktioniert vor und nach 90°-Drehung ohne Multiplikation', async ({ page }) => {
+    await loadSchmuck(page);
+    await tab(page, 'Projekt').click();
+    await page.getByRole('button', { name: /Leeres Etui/ }).first().click();
+    await tab(page, 'Editor').click();
+    await page.locator('.lib-item[data-module-id="M01"]').first().click();
+    await page.locator('.canvas-svg g.mod').first().click();
+
+    const wInput = page.getByRole('spinbutton', { name: 'Breite', exact: true });
+    const hInput = page.getByRole('spinbutton', { name: 'Höhe', exact: true });
+    const handle = page.locator('.scale-handle').first();
+    const b1 = await handle.boundingBox();
+    await page.mouse.move(b1!.x + b1!.width / 2, b1!.y + b1!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b1!.x + b1!.width / 2 + 40, b1!.y + b1!.height / 2, { steps: 8 });
+    await page.mouse.up();
+    expect(Number(await wInput.inputValue())).toBeGreaterThan(70);
+
+    await page.keyboard.press('r');
+    const hBefore = Number(await hInput.inputValue());
+    const b2 = await page.locator('.scale-handle').first().boundingBox();
+    await page.mouse.move(b2!.x + b2!.width / 2, b2!.y + b2!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b2!.x + b2!.width / 2 + 40, b2!.y + b2!.height / 2, { steps: 8 });
+    await page.mouse.up();
+    const hAfter = Number(await hInput.inputValue());
+    expect(hAfter).toBeGreaterThan(hBefore);
+    expect(hAfter - hBefore).toBeLessThan(35);
   });
 });
 
@@ -445,5 +485,73 @@ test.describe('10 — Ungespeicherte Änderungen (Schutz vor Datenverlust)', () 
     await page.keyboard.press('Escape');
     await expect(bar).toBeHidden();
     await expect(page.locator('.topbar .project-name')).toHaveValue('Schmuck-Organizer');
+  });
+});
+
+test.describe('11 — Responsive Matrix & Anleitung-Druck', () => {
+  for (const [label, size] of [
+    ['390x844', { width: 390, height: 844 }],
+    ['430x844', { width: 430, height: 844 }],
+    ['768x1024', { width: 768, height: 1024 }],
+    ['1024x1024', { width: 1024, height: 1024 }],
+    ['1440x900', { width: 1440, height: 900 }],
+    ['1920x900', { width: 1920, height: 900 }],
+  ] as const) {
+    test(`${label}: keine Überläufe in allen fünf Ansichten`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await loadSchmuck(page);
+      for (const name of ['Editor', 'Schnittmuster', 'Material', 'Anleitung', 'Projekt']) {
+        await tab(page, name).click();
+        const metrics = await page.evaluate(() => {
+          const docOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+          const tabbar = document.querySelector('.tabbar');
+          const tabbarRect = tabbar?.getBoundingClientRect();
+          const tabClipped = Array.from(document.querySelectorAll('.tab')).filter((el) => {
+            const r = el.getBoundingClientRect();
+            return tabbarRect && (r.bottom > tabbarRect.bottom + 1 || r.right > tabbarRect.right + 1);
+          }).length;
+          const clippedTables = Array.from(document.querySelectorAll('table.data')).filter((t) => {
+            const p = t.closest('.table-scroll') || t.parentElement;
+            return t.scrollWidth > window.innerWidth && (!p || getComputedStyle(p).overflowX === 'visible');
+          }).length;
+          return { docOverflow, tabClipped, clippedTables };
+        });
+        expect(metrics.docOverflow, `${label}/${name} docOverflow`).toBeLessThanOrEqual(1);
+        expect(metrics.tabClipped, `${label}/${name} tabClipped`).toBe(0);
+        expect(metrics.clippedTables, `${label}/${name} clippedTables`).toBe(0);
+      }
+      if (size.width <= 1000) {
+        await page.getByRole('button', { name: /Eigenschaften/i }).click();
+        await expect(page.locator('.sheet').first()).toBeVisible();
+        await page.keyboard.press('Escape');
+      }
+    });
+  }
+
+  test('Anleitung drucken öffnet nur die Nähanleitung ohne Schnittmusterkacheln', async ({ page }) => {
+    await loadSchmuck(page);
+    await tab(page, 'Anleitung').click();
+    await page.evaluate(() => {
+      (window as unknown as { __printed: string }).__printed = '';
+      window.open = (() => ({
+        opener: window,
+        focus: () => {},
+        print: () => {},
+        document: {
+          readyState: 'complete',
+          open: () => {},
+          write: (s: string) => {
+            (window as unknown as { __printed: string }).__printed += s;
+          },
+          close: () => {},
+        },
+      })) as unknown as typeof window.open;
+    });
+    await page.locator('.doc-actions button').first().click();
+    const html = await page.evaluate(() => (window as unknown as { __printed: string }).__printed);
+    expect(html).toContain('Nähanleitung');
+    expect(html).not.toContain('class="tilebody"');
+    expect(html).not.toContain('<div class="cal-box">');
+    expect(html).not.toContain('<table class="material">');
   });
 });

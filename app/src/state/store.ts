@@ -138,7 +138,7 @@ const emptySession: EditorSession = {
   snap: true,
   gridMm: 5,
   view: 'editor',
-  propsOpen: true,
+  propsOpen: false,
   libOpen: false,
   warnOpen: false,
   dismissed: [],

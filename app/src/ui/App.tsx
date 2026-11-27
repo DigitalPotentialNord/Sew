@@ -1,6 +1,5 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { buildPrintHtml, downloadText, fileName, tilePiece, toSvg, type PrintStrings } from '../core/export';
-import { buildPdf } from '../core/pdf';
 import { useStore } from '../state/store';
 import { formatAmount } from '../core/construction';
 import { t } from '../i18n/de';
@@ -55,6 +54,9 @@ export function App(): JSX.Element {
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selection.length > 0) {
         e.preventDefault();
         remove(selection);
+      } else if (!mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r' && selection.length === 1) {
+        e.preventDefault();
+        useStore.getState().rotate(selection[0]!);
       } else if (e.key === 'Escape') {
         useStore.getState().select([]);
       } else if (e.key === '1') setView('editor');
@@ -79,6 +81,7 @@ export function App(): JSX.Element {
           {view === 'instructions' ? <InstructionsHost /> : null}
           {view === 'project' ? <ProjectView /> : null}
         </main>
+        <MobileSheets />
         <Statusbar />
         <DiscardConfirm />
         <div className="toasts" aria-live="polite">
@@ -103,6 +106,8 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
   const toast = useStore((s) => s.toast);
   const libOpen = useStore((s) => s.session.libOpen);
   const setLibOpen = useStore((s) => s.setLibOpen);
+  const propsOpen = useStore((s) => s.session.propsOpen);
+  const setPropsOpen = useStore((s) => s.setPropsOpen);
   const warnOpen = useStore((s) => s.session.warnOpen);
   const setWarnOpen = useStore((s) => s.setWarnOpen);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -127,8 +132,40 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-group mobile-only">
-        <Button icon="menu" onClick={() => setLibOpen(!libOpen)} title={t('mobile.lib')} active={libOpen} />
-        <Button icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'} onClick={() => setWarnOpen(!warnOpen)} active={warnOpen} title={t('warn.title')} />
+        <Button icon="save" onClick={save} title={t('top.save')} ariaLabel={t('top.save')} />
+        <Button
+          icon="menu"
+          onClick={() => {
+            setPropsOpen(false);
+            setWarnOpen(false);
+            setLibOpen(!libOpen);
+          }}
+          title={t('mobile.lib')}
+          ariaLabel={t('mobile.lib')}
+          active={libOpen}
+        />
+        <Button
+          icon="sliders"
+          onClick={() => {
+            setLibOpen(false);
+            setWarnOpen(false);
+            setPropsOpen(!propsOpen);
+          }}
+          title={t('mobile.panel')}
+          ariaLabel={t('mobile.panel')}
+          active={propsOpen}
+        />
+        <Button
+          icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'}
+          onClick={() => {
+            setLibOpen(false);
+            setPropsOpen(false);
+            setWarnOpen(!warnOpen);
+          }}
+          active={warnOpen}
+          title={t('warn.title')}
+          ariaLabel={t('warn.title')}
+        />
       </div>
       <div className="topbar-group desktop-only">
         <Button icon="save" onClick={save} title={t('top.save')} />
@@ -220,6 +257,7 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
         })),
         footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
       };
+      const { buildPdf } = await import('../core/pdf');
       const bytes = await buildPdf(c, strings);
       downloadText(fileName(project.name, 'schnittmuster', 'pdf'), 'application/pdf', bytes);
       const pages = c.pieces.filter((pc) => pc.kind === 'cut').reduce((n, pc) => n + tilePiece(pc).length, 0) + 4;
@@ -281,17 +319,17 @@ function Tabbar({
           {it.id === 'editor' && modules > 0 ? <span className="count">{modules}</span> : null}
         </button>
       ))}
-      <span style={{ flex: 1 }} />
+      <span className="tab-spacer" />
       {errors > 0 ? (
-        <button className="tab" style={{ color: 'var(--error)' }} onClick={() => useStore.getState().setWarnOpen(true)}>
+        <button className="tab tab-alert" style={{ color: 'var(--error)' }} onClick={() => useStore.getState().setWarnOpen(true)} aria-label={t('warn.errors', { n: errors })}>
           <Icon name="error" size={13} />
-          {errors}
+          <span>{errors}</span>
         </button>
       ) : null}
       {warns > 0 ? (
-        <button className="tab" style={{ color: 'var(--warn)' }} onClick={() => useStore.getState().setWarnOpen(true)}>
+        <button className="tab tab-alert" style={{ color: 'var(--warn)' }} onClick={() => useStore.getState().setWarnOpen(true)} aria-label={t('warn.warns', { n: warns })}>
           <Icon name="alert" size={13} />
-          {warns}
+          <span>{warns}</span>
         </button>
       ) : null}
     </nav>
@@ -300,10 +338,6 @@ function Tabbar({
 
 // ─────────────────────────────────────────────────────────────────────────────
 function EditorWorkspace(): JSX.Element {
-  const libOpen = useStore((s) => s.session.libOpen);
-  const setLibOpen = useStore((s) => s.setLibOpen);
-  const warnOpen = useStore((s) => s.session.warnOpen);
-  const setWarnOpen = useStore((s) => s.setWarnOpen);
   const selection = useStore((s) => s.session.selection);
 
   return (
@@ -324,10 +358,28 @@ function EditorWorkspace(): JSX.Element {
         </div>
         <SelectionFoot count={selection.length} />
       </aside>
+    </>
+  );
+}
 
+function MobileSheets(): JSX.Element {
+  const libOpen = useStore((s) => s.session.libOpen);
+  const setLibOpen = useStore((s) => s.setLibOpen);
+  const propsOpen = useStore((s) => s.session.propsOpen);
+  const setPropsOpen = useStore((s) => s.setPropsOpen);
+  const warnOpen = useStore((s) => s.session.warnOpen);
+  const setWarnOpen = useStore((s) => s.setWarnOpen);
+
+  return (
+    <>
       {libOpen ? (
         <Sheet title={t('mobile.lib')} onClose={() => setLibOpen(false)}>
           <Library />
+        </Sheet>
+      ) : null}
+      {propsOpen ? (
+        <Sheet title={t('mobile.panel')} onClose={() => setPropsOpen(false)}>
+          <Properties />
         </Sheet>
       ) : null}
       {warnOpen ? (
@@ -362,7 +414,7 @@ function WarningsCollapsed(): JSX.Element {
           {visible.length === 0 ? <Icon name="check" size={12} /> : null}
         </span>
       </button>
-      <div style={{ overflowY: 'auto', flex: 1 }}>
+      <div style={{ overflowY: 'auto', flex: 1, display: open ? 'block' : 'none' }}>
         <Warnings />
       </div>
     </div>
@@ -418,8 +470,8 @@ function Statusbar(): JSX.Element {
       <span>
         {c.metrics.moduleCount} Module · {c.metrics.cutPieceCount} Teile
       </span>
-      <span className="status-sep">·</span>
-      <span>
+      <span className="status-sep status-metrics">·</span>
+      <span className="status-metrics">
         {c.fabricPlan ? `${c.fabricPlan.meters.toFixed(2).replace('.', ',')} m Stoff` : '—'} · {formatAmount(c.metrics.seamLengthMm, 'mm')} Naht
       </span>
       <span className="status-sep desktop-only">·</span>
@@ -430,8 +482,8 @@ function Statusbar(): JSX.Element {
       <span className="mono desktop-only" title="Konstruktions-Hash (deterministisch)">
         {t('top.status.hash')} {c.projectHash}
       </span>
-      <span className="status-sep">·</span>
-      <span>{saved ? t('top.status.saved') : t('top.status.unsaved')}</span>
+      <span className="status-sep desktop-only">·</span>
+      <span style={{ flexShrink: 0 }}>{saved ? t('top.status.saved') : t('top.status.unsaved')}</span>
     </footer>
   );
 }
@@ -482,15 +534,18 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
     .filter((f) => f.severity === 'warn' && !state.session.dismissed.includes(findingKey(f)))
     .map((f) => t(`rule.${f.ruleId}.detail`, f.values));
 
-  const html = buildPrintHtml(c, project.name, strings, materialLines, mode === 'instructions' ? instructions : instructions, openWarnings);
+  const html = buildPrintHtml(c, project.name, strings, materialLines, instructions, openWarnings, {
+    instructionsOnly: mode === 'instructions',
+  });
 
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) {
     // Fallback: Datei herunterladen
-    downloadText(fileName(project.name, 'anleitung', 'html'), 'text/html', html);
+    downloadText(fileName(project.name, mode === 'instructions' ? 'anleitung' : 'schnittmuster', 'html'), 'text/html', html);
     state.toast(t('toast.popupBlocked'), 'info');
     return;
   }
+  w.opener = null;
   w.document.open();
   w.document.write(html);
   w.document.close();

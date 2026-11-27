@@ -135,21 +135,28 @@ function listPages(
   let p = newPage(doc);
   p.page.drawText(safe(title), { x: p.left, y: p.top - mm(6), size: 14, color: INK });
   let y = p.top - mm(13);
-  const lineHeight = mm(6);
+  const lineHeight = mm(5.5);
   for (const row of rows) {
-    const lines = wrapText(row.left, mm(85), 9);
-    const needed = Math.max(lines.length, 1) * lineHeight;
+    const leftLines = wrapText(row.left, mm(84), 9);
+    const midLines = wrapText(row.mid, mm(42), 9);
+    const rightLines = wrapText(row.right, mm(52), 7.5);
+    const lineCount = Math.max(leftLines.length, midLines.length, rightLines.length, 1);
+    const needed = lineCount * lineHeight + mm(1);
     if (y - needed < p.bottom + mm(12)) {
       footer(p, footerText);
       p = newPage(doc);
       p.page.drawText(safe(`${title} (Fortsetzung)`), { x: p.left, y: p.top - mm(6), size: 11, color: GREY });
       y = p.top - mm(13);
     }
-    lines.forEach((ln, i) => {
+    leftLines.forEach((ln, i) => {
       p.page.drawText(safe(ln), { x: p.left, y: y - i * lineHeight, size: 9, color: INK });
     });
-    p.page.drawText(row.mid, { x: p.left + mm(95), y, size: 9, color: INK });
-    p.page.drawText(row.right, { x: p.left + mm(140), y, size: 7.5, color: GREY });
+    midLines.forEach((ln, i) => {
+      p.page.drawText(safe(ln), { x: p.left + mm(88), y: y - i * lineHeight, size: 9, color: INK });
+    });
+    rightLines.forEach((ln, i) => {
+      p.page.drawText(safe(ln), { x: p.left + mm(134), y: y - i * lineHeight, size: 7.5, color: GREY });
+    });
     y -= needed;
   }
   footer(p, footerText);
@@ -157,7 +164,7 @@ function listPages(
 
 export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(s.title);
+  doc.setTitle(safe(s.title));
   doc.setCreator('Organizer Studio');
   doc.setProducer('Organizer Studio');
   const cut = c.pieces.filter((p) => p.kind === 'cut');
@@ -219,25 +226,21 @@ export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Arr
 
   // ── Anleitung: umbrochene Schritte, über so viele Seiten wie nötig ───────
   {
-    const p = newPage(doc);
-    let y = p.top - mm(6);
-    let lastPage = p;
-    const heading = (page: typeof p, label: string): number => {
-      page.page.drawText(safe(label), { x: page.left, y: page.top - mm(6), size: 14, color: INK });
-      return page.top - mm(13);
+    let page = newPage(doc);
+    const heading = (pg: typeof page, label: string): number => {
+      pg.page.drawText(safe(label), { x: pg.left, y: pg.top - mm(6), size: 14, color: INK });
+      return pg.top - mm(13);
     };
-    y = heading(p, 'Anleitung');
+    let y = heading(page, 'Anleitung');
     const bodySize = 9;
     const lineHeight = 3.6 * PT * bodySize / 9 * 1.02;
     for (const step of s.instructions) {
       const lines = wrapText(safe(`${step.index}.`), mm(10), bodySize);
       const body = wrapText(safe(`${step.phase.toUpperCase()}  ${step.text}`), mm(150), bodySize);
       const needed = Math.max(lines.length, body.length) * lineHeight + mm(3);
-      let page = p;
-      if (y - needed < p.bottom + mm(12)) {
+      if (y - needed < page.bottom + mm(12)) {
         footer(page, s.footer);
         page = newPage(doc);
-        lastPage = page;
         y = heading(page, 'Anleitung (Fortsetzung)');
       }
       page.page.drawText(safe(`${step.index}.`), { x: page.left, y, size: bodySize, color: GREY });
@@ -246,13 +249,13 @@ export async function buildPdf(c: Construction, s: PdfStrings): Promise<Uint8Arr
       });
       y -= needed;
     }
-    footer(lastPage, s.footer);
+    footer(page, s.footer);
   }
 
   return doc.save();
 }
 
-/** Ein achsenparalleles Segment auf ein Fenster zuschneiden (Liang–Barsky, 1D). */
+/** Schneidet ein beliebiges Liniensegment auf ein Kachelfenster zu (Liang–Barsky). */
 export function clipSegment(
   a: readonly [number, number],
   b: readonly [number, number],
@@ -260,31 +263,30 @@ export function clipSegment(
 ): [[number, number], [number, number]] | null {
   const [x0, y0] = a;
   const [x1, y1] = b;
-  const minX = win.x;
-  const maxX = win.x + win.w;
-  const minY = win.y;
-  const maxY = win.y + win.h;
-
-  // Achsenparallele Segmente: die eine Achse ist konstant.
-  if (x0 === x1) {
-    if (x0 < minX || x0 > maxX) return null;
-    const lo = Math.min(y0, y1);
-    const hi = Math.max(y0, y1);
-    const s = Math.max(lo, minY);
-    const e = Math.min(hi, maxY);
-    if (s > e) return null;
-    return y0 <= y1 ? [[x0, s], [x1, e]] : [[x0, e], [x1, s]];
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  let t0 = 0;
+  let t1 = 1;
+  const p = [-dx, dx, -dy, dy];
+  const q = [x0 - win.x, win.x + win.w - x0, y0 - win.y, win.y + win.h - y0];
+  for (let i = 0; i < 4; i++) {
+    if (p[i]! === 0) {
+      if (q[i]! < 0) return null;
+    } else {
+      const r = q[i]! / p[i]!;
+      if (p[i]! < 0) {
+        if (r > t1) return null;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return null;
+        if (r < t1) t1 = r;
+      }
+    }
   }
-  if (y0 === y1) {
-    if (y0 < minY || y0 > maxY) return null;
-    const lo = Math.min(x0, x1);
-    const hi = Math.max(x0, x1);
-    const s = Math.max(lo, minX);
-    const e = Math.min(hi, maxX);
-    if (s > e) return null;
-    return x0 <= x1 ? [[s, y0], [e, y1]] : [[e, y0], [s, y1]];
-  }
-  return null; // schräge Linien kommen im Schnittmuster nicht vor
+  return [
+    [x0 + t0 * dx, y0 + t0 * dy],
+    [x0 + t1 * dx, y0 + t1 * dy],
+  ];
 }
 
 /**
@@ -299,33 +301,35 @@ function drawTile(doc: PDFDocument, piece: ComputedPiece, tile: Tile, footerText
   const p = newPage(doc);
   const G = PAGE.A4.glue; // Klebekante in mm
   const hasLeftGutter = tile.col > 0;
-  const hasBottomGutter = tile.row > 0;
-  // Klebekante ist Teil des Drucks: der Streifen links (bzw. unten) zeigt das
+  const hasTopGutter = tile.row > 0;
+  // Klebekante ist Teil des Drucks: der Streifen links (bzw. oben) zeigt das
   // Stück der Nachbarseite noch einmal, damit man exakt übereinanderkleben kann.
   const gutterLeft = hasLeftGutter ? G : 0;
-  const gutterBottom = hasBottomGutter ? G : 0;
+  const gutterTop = hasTopGutter ? G : 0;
 
   const headY = p.top - mm(2);
   p.page.drawText(safe(piece.id), { x: p.left, y: headY, size: 8, color: INK });
   p.page.drawText(
     safe(`Kachel ${tile.label} · ${tile.col + 1}/${tile.cols} · ${tile.row + 1}/${tile.rows} · ${piece.count}× · ${piece.w} × ${piece.h} mm`),
-    { x: p.left + mm(55), y: headY, size: 7, color: GREY },
+    { x: p.left + mm(50), y: headY, size: 7, color: GREY },
   );
+  // Kachelmarke klar im Kopf rechts, verdeckt keine Schnittlinie
+  p.page.drawText(safe(tile.label), { x: p.right - mm(10), y: headY - mm(0.5), size: 11, color: GREY });
 
-  // Fenster im Teil-Koordinatensystem, um die Klebekante erweitert
+  // Fenster im Teil-Koordinatensystem, um die Klebekanten links/oben erweitert
   const win = {
     x: tile.srcRect.x - gutterLeft,
-    y: tile.srcRect.y,
+    y: tile.srcRect.y - gutterTop,
     w: tile.srcRect.w + gutterLeft,
-    h: tile.srcRect.h + gutterBottom,
+    h: tile.srcRect.h + gutterTop,
   };
-  const contentTop = headY - mm(6);
+  const contentTop = headY - mm(5);
   const X = (px: number): number => p.left + mm(px - win.x);
   const Y = (py: number): number => contentTop - mm(py - win.y);
 
   const stroke = (
-    a: [number, number],
-    b: [number, number],
+    a: readonly [number, number],
+    b: readonly [number, number],
     opts: { color: typeof INK; width: number; dash?: number[] },
   ): void => {
     const seg = clipSegment(a, b, win);
@@ -339,75 +343,120 @@ function drawTile(doc: PDFDocument, piece: ComputedPiece, tile: Tile, footerText
     });
   };
 
-  const nz = Math.max(0, (piece.w - piece.netW) / 2);
-  const outline: [[number, number], [number, number]][] = [
-    [[0, 0], [piece.w, 0]],
-    [[piece.w, 0], [piece.w, piece.h]],
-    [[piece.w, piece.h], [0, piece.h]],
-    [[0, piece.h], [0, 0]],
-  ];
-  for (const [a, b] of outline) stroke(a, b, { color: INK, width: 0.7 });
+  const strokeRounded = (
+    rx: number,
+    ry: number,
+    rw: number,
+    rh: number,
+    rad: number,
+    opts: { color: typeof INK; width: number; dash?: number[] },
+  ): void => {
+    const r = Math.max(0, Math.min(rad, Math.min(rw, rh) / 2));
+    stroke([rx + r, ry], [rx + rw - r, ry], opts);
+    stroke([rx + rw, ry + r], [rx + rw, ry + rh - r], opts);
+    stroke([rx + rw - r, ry + rh], [rx + r, ry + rh], opts);
+    stroke([rx, ry + rh - r], [rx, ry + r], opts);
+    if (r > 0) {
+      const arc = (cx: number, cy: number, a0: number, a1: number) => {
+        const steps = 10;
+        let prev: [number, number] = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)];
+        for (let i = 1; i <= steps; i++) {
+          const ang = a0 + ((a1 - a0) * i) / steps;
+          const next: [number, number] = [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+          stroke(prev, next, opts);
+          prev = next;
+        }
+      };
+      arc(rx + r, ry + r, Math.PI, Math.PI * 1.5);
+      arc(rx + rw - r, ry + r, Math.PI * 1.5, Math.PI * 2);
+      arc(rx + rw - r, ry + rh - r, 0, Math.PI * 0.5);
+      arc(rx + r, ry + rh - r, Math.PI * 0.5, Math.PI);
+    }
+  };
 
-  if (nz > 0) {
-    const inner: [[number, number], [number, number]][] = [
-      [[nz, nz], [piece.w - nz, nz]],
-      [[piece.w - nz, nz], [piece.w - nz, piece.h - nz]],
-      [[piece.w - nz, piece.h - nz], [nz, piece.h - nz]],
-      [[nz, piece.h - nz], [nz, nz]],
-    ];
-    for (const [a, b] of inner) stroke(a, b, { color: GREY, width: 0.35, dash: [3, 2] });
+  // Schnittkante
+  strokeRounded(0, 0, piece.w, piece.h, piece.radius, { color: INK, width: 0.7 });
+
+  // Nählinie (nur wenn Nahtzugabe vorhanden)
+  const hasSA = piece.netW < piece.w || piece.netH < piece.h;
+  if (hasSA) {
+    const netRad = Math.max(0, piece.radius - Math.min(piece.netRect.x, piece.netRect.y));
+    strokeRounded(piece.netRect.x, piece.netRect.y, piece.netW, piece.netH, netRad, {
+      color: GREY,
+      width: 0.35,
+      dash: [3, 2],
+    });
   }
 
-  // Fadenlauf-Pfeil, nur wenn er ganz in diesem Fenster liegt
-  const midX = piece.w / 2;
-  const top = nz + 6;
-  const bot = piece.h - nz - 6;
-  const arrowVisible = midX >= win.x && midX <= win.x + win.w && top >= win.y && bot <= win.y + win.h;
-  if (arrowVisible && bot - top > 12) {
-    stroke([midX, top], [midX, bot], { color: INK, width: 0.35 });
-    stroke([midX, top], [midX - 4, top + 4], { color: INK, width: 0.35 });
-    stroke([midX, top], [midX + 4, top + 4], { color: INK, width: 0.35 });
-    p.page.drawText(safe('Fadenlauf'), { x: X(midX) + mm(2), y: Y((top + bot) / 2), size: 5.5, color: GREY });
+  // Bruchkante
+  if (piece.foldEdge && piece.foldEdge !== 'none') {
+    if (piece.foldEdge === 'top') stroke([2, 0], [piece.w - 2, 0], { color: GREY, width: 0.5, dash: [6, 2, 1, 2] });
+    else if (piece.foldEdge === 'bottom') stroke([2, piece.h], [piece.w - 2, piece.h], { color: GREY, width: 0.5, dash: [6, 2, 1, 2] });
+    else if (piece.foldEdge === 'left') stroke([0, 2], [0, piece.h - 2], { color: GREY, width: 0.5, dash: [6, 2, 1, 2] });
+    else if (piece.foldEdge === 'right') stroke([piece.w, 2], [piece.w, piece.h - 2], { color: GREY, width: 0.5, dash: [6, 2, 1, 2] });
+  }
+
+  // Fadenlauf-Pfeil (längs oder quer)
+  const padY = piece.netRect.y + 6;
+  if (piece.grain === 'crosswise') {
+    const midY = piece.h / 2;
+    const leftX = piece.netRect.x + 6;
+    const rightX = piece.netRect.x + piece.netW - 6;
+    if (rightX - leftX > 12) {
+      stroke([leftX, midY], [rightX, midY], { color: INK, width: 0.35 });
+      stroke([rightX, midY], [rightX - 4, midY - 3], { color: INK, width: 0.35 });
+      stroke([rightX, midY], [rightX - 4, midY + 3], { color: INK, width: 0.35 });
+      if (midY >= win.y + 4 && midY <= win.y + win.h - 4 && (leftX + rightX) / 2 >= win.x && (leftX + rightX) / 2 <= win.x + win.w - 18) {
+        p.page.drawText(safe('Fadenlauf quer'), { x: X((leftX + rightX) / 2) - mm(8), y: Y(midY) + mm(2), size: 5.5, color: GREY });
+      }
+    }
+  } else if (piece.grain === 'lengthwise') {
+    const midX = piece.w / 2;
+    const top = Math.min(padY, piece.h * 0.2);
+    const bot = Math.max(piece.h - padY, piece.h * 0.8);
+    if (bot - top > 12) {
+      stroke([midX, top], [midX, bot], { color: INK, width: 0.35 });
+      stroke([midX, top], [midX - 3.5, top + 4], { color: INK, width: 0.35 });
+      stroke([midX, top], [midX + 3.5, top + 4], { color: INK, width: 0.35 });
+      if (midX >= win.x + 6 && midX <= win.x + win.w - 14 && (top + bot) / 2 >= win.y && (top + bot) / 2 <= win.y + win.h) {
+        p.page.drawText(safe('Fadenlauf'), { x: X(midX) + mm(2), y: Y((top + bot) / 2), size: 5.5, color: GREY });
+      }
+    }
   }
 
   // ── Klebekanten ───────────────────────────────────────────────────────────
-  // Die Nahtstelle selbst ist eine feine gestrichelte Linie; der Streifen
-  // daneben trägt den Text, damit man weiß, woran man klebt.
   if (hasLeftGutter) {
     const seamX = p.left + mm(G);
     p.page.drawLine({
       start: { x: seamX, y: contentTop },
-      end: { x: seamX, y: contentTop - mm(tile.srcRect.h) },
+      end: { x: seamX, y: contentTop - mm(win.h) },
       thickness: 0.3,
       color: LIGHT,
       dashArray: [2, 2],
     });
-    p.page.drawText(safe(hasBottomGutter ? 'Klebekante' : 'Klebekante links'), {
+    p.page.drawText(safe(hasTopGutter ? 'Klebekante' : 'Klebekante links'), {
       x: p.left + mm(0.5),
-      y: contentTop - mm(tile.srcRect.h) + mm(1),
+      y: contentTop - mm(win.h) + mm(1.5),
       size: 6,
       color: GREY,
     });
   }
-  if (hasBottomGutter) {
-    const seamY = contentTop - mm(tile.srcRect.h);
+  if (hasTopGutter) {
+    const seamY = contentTop - mm(G);
     p.page.drawLine({
       start: { x: p.left, y: seamY },
-      end: { x: p.right, y: seamY },
+      end: { x: p.left + mm(win.w), y: seamY },
       thickness: 0.3,
       color: LIGHT,
       dashArray: [2, 2],
     });
-    p.page.drawText(safe('Klebekante unten — überlappt mit der vorherigen Seite'), {
+    p.page.drawText(safe('Klebekante oben — überlappt mit vorheriger Seite'), {
       x: p.left + mm(G) + mm(2),
-      y: seamY + mm(G) - mm(3),
+      y: seamY + mm(2.5),
       size: 6,
       color: GREY,
     });
   }
-
-  // Kachelmarke groß in der Ecke: beim Zusammenlegen unentbehrlich
-  p.page.drawText(safe(tile.label), { x: p.left + mm(1), y: p.bottom + mm(11), size: 12, color: LIGHT });
 
   footer(p, footerText);
 }

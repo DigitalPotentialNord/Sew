@@ -74,37 +74,39 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
         </Panel>
 
         <Panel title={t('pattern.tile')} flush>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Teil</th>
-                <th style={{ textAlign: 'right' }}>Maße (mm)</th>
-                <th style={{ textAlign: 'right' }}>Nähmaß</th>
-                <th style={{ textAlign: 'right' }}>Anz.</th>
-                <th>A4-Seiten</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cut.map((p) => {
-                const tiles = tilePiece(p);
-                return (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 500 }}>{t(p.nameKey)}</td>
-                    <td className="num">
-                      {p.w} × {p.h}
-                    </td>
-                    <td className="num" style={{ color: 'var(--ink-3)' }}>
-                      {p.netW} × {p.netH}
-                    </td>
-                    <td className="num">{p.count}×</td>
-                    <td className="mono" style={{ color: 'var(--ink-2)' }}>
-                      {tiles.map((x) => x.label).join(' · ')}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Teil</th>
+                  <th style={{ textAlign: 'right' }}>Maße (mm)</th>
+                  <th style={{ textAlign: 'right' }}>Nähmaß</th>
+                  <th style={{ textAlign: 'right' }}>Anz.</th>
+                  <th>A4-Seiten</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cut.map((p) => {
+                  const tiles = tilePiece(p);
+                  return (
+                    <tr key={p.id}>
+                      <td style={{ fontWeight: 500 }}>{t(p.nameKey)}</td>
+                      <td className="num">
+                        {p.w} × {p.h}
+                      </td>
+                      <td className="num" style={{ color: 'var(--ink-3)' }}>
+                        {p.netW} × {p.netH}
+                      </td>
+                      <td className="num">{p.count}×</td>
+                      <td className="mono" style={{ color: 'var(--ink-2)' }}>
+                        {tiles.map((x) => x.label).join(' · ')}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Panel>
 
         <div className="piece-grid">
@@ -112,6 +114,8 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
             const maxW = 200;
             const maxH = 130;
             const s = Math.min(maxW / Math.max(1, p.w), maxH / Math.max(1, p.h));
+            const hasSA = p.netW < p.w || p.netH < p.h;
+            const netRadius = Math.max(0, p.radius - Math.min(p.netRect.x, p.netRect.y));
             return (
               <div className="piece-card" key={p.id}>
                 <div className="piece-card-head">
@@ -120,21 +124,46 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
                 </div>
                 <div className="piece-card-svg">
                   <svg width={Math.max(20, p.w * s)} height={Math.max(20, p.h * s)} viewBox={`0 0 ${p.w} ${p.h}`} role="img" aria-label={t(p.nameKey)}>
-                    <path d={roundedRectPath({ x: 0 as Mm, y: 0 as Mm, w: p.w, h: p.h }, Math.min(p.radius * s, 6))} fill="#fff" stroke="var(--ink)" strokeWidth={Math.max(0.4, 1 / s)} />
-                    <path
-                      d={roundedRectPath({ x: ((p.w - p.netW) / 2) as Mm, y: (p.h - p.netH - (p.h - p.netH) / 2) as Mm, w: p.netW, h: p.netH }, 0)}
-                      fill="none"
-                      stroke="var(--ink-3)"
-                      strokeWidth={Math.max(0.3, 0.8 / s)}
-                      strokeDasharray={`${4 / s} ${3 / s}`}
-                    />
-                    <path d={`M${p.w / 2},${3 / s} V${p.h - 3 / s}`} stroke="var(--ink-2)" strokeWidth={Math.max(0.3, 0.8 / s)} />
-                    <path
-                      d={`M${p.w / 2 - 3 / s},${8 / s} L${p.w / 2},${3 / s} L${p.w / 2 + 3 / s},${8 / s}`}
-                      fill="none"
-                      stroke="var(--ink-2)"
-                      strokeWidth={Math.max(0.3, 0.8 / s)}
-                    />
+                    <path d={roundedRectPath({ x: 0 as Mm, y: 0 as Mm, w: p.w, h: p.h }, p.radius)} fill="#fff" stroke="var(--ink)" strokeWidth={Math.max(0.4, 1 / s)} />
+                    {hasSA ? (
+                      <path
+                        d={roundedRectPath(p.netRect, netRadius)}
+                        fill="none"
+                        stroke="var(--ink-3)"
+                        strokeWidth={Math.max(0.3, 0.8 / s)}
+                        strokeDasharray={`${4 / s} ${3 / s}`}
+                      />
+                    ) : null}
+                    {p.foldEdge === 'top' ? (
+                      <path d={`M2,0 H${p.w - 2}`} stroke="var(--geo-fold)" strokeWidth={Math.max(0.4, 1 / s)} strokeDasharray={`${5 / s} ${2 / s}`} />
+                    ) : p.foldEdge === 'bottom' ? (
+                      <path d={`M2,${p.h} H${p.w - 2}`} stroke="var(--geo-fold)" strokeWidth={Math.max(0.4, 1 / s)} strokeDasharray={`${5 / s} ${2 / s}`} />
+                    ) : p.foldEdge === 'left' ? (
+                      <path d={`M0,2 V${p.h - 2}`} stroke="var(--geo-fold)" strokeWidth={Math.max(0.4, 1 / s)} strokeDasharray={`${5 / s} ${2 / s}`} />
+                    ) : p.foldEdge === 'right' ? (
+                      <path d={`M${p.w},2 V${p.h - 2}`} stroke="var(--geo-fold)" strokeWidth={Math.max(0.4, 1 / s)} strokeDasharray={`${5 / s} ${2 / s}`} />
+                    ) : null}
+                    {p.grain === 'crosswise' ? (
+                      <>
+                        <path d={`M${3 / s},${p.h / 2} H${Math.max(6 / s, p.w - 3 / s)}`} stroke="var(--ink-2)" strokeWidth={Math.max(0.3, 0.8 / s)} />
+                        <path
+                          d={`M${p.w - 8 / s},${p.h / 2 - 3 / s} L${p.w - 3 / s},${p.h / 2} L${p.w - 8 / s},${p.h / 2 + 3 / s}`}
+                          fill="none"
+                          stroke="var(--ink-2)"
+                          strokeWidth={Math.max(0.3, 0.8 / s)}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <path d={`M${p.w / 2},${3 / s} V${Math.max(6 / s, p.h - 3 / s)}`} stroke="var(--ink-2)" strokeWidth={Math.max(0.3, 0.8 / s)} />
+                        <path
+                          d={`M${p.w / 2 - 3 / s},${8 / s} L${p.w / 2},${3 / s} L${p.w / 2 + 3 / s},${8 / s}`}
+                          fill="none"
+                          stroke="var(--ink-2)"
+                          strokeWidth={Math.max(0.3, 0.8 / s)}
+                        />
+                      </>
+                    )}
                   </svg>
                 </div>
                 <div className="piece-card-meta">

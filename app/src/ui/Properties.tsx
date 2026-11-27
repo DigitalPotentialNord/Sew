@@ -1,4 +1,5 @@
 /** Eigenschaftenpanel: Parameter, Position, berechnete Werte — echte Zwei-Wege-Bindung. */
+import { Fragment } from 'react';
 import { bbox, mm } from '../core/geometry';
 import { moduleDef, channelHeight, channelWidth } from '../core/modules';
 import { LIMITS } from '../core/practice';
@@ -15,6 +16,7 @@ export function Properties(): JSX.Element {
   const setParam = useStore((s) => s.setParam);
   const setPar = useStore((s) => s.setPar);
   const duplicate = useStore((s) => s.duplicate);
+  const moveModule = useStore((s) => s.moveModule);
   const remove = useStore((s) => s.remove);
   const rotate = useStore((s) => s.rotate);
   const select = useStore((s) => s.select);
@@ -209,18 +211,7 @@ export function Properties(): JSX.Element {
               variant="outline"
               size="sm"
               onClick={() => {
-                const inRow = c.modules.filter((m) => m.rowId === placed.rowId);
-                if (idx > 0) {
-                  const target = inRow[idx - 1]!;
-                  const j = c.modules.findIndex((m) => m.instanceId === target.instanceId);
-                  setPar((p) => {
-                    const mods = [...p.modules];
-                    const from = mods.findIndex((m) => m.id === id);
-                    const [item] = mods.splice(from, 1);
-                    mods.splice(j, 0, item!);
-                    return { ...p, modules: mods };
-                  });
-                }
+                if (idx > 0) moveModule(id, placed.rowId, idx - 1);
               }}
               disabled={idx <= 0}
             >
@@ -230,18 +221,8 @@ export function Properties(): JSX.Element {
               variant="outline"
               size="sm"
               onClick={() => {
-                const inRow = c.modules.filter((m) => m.rowId === placed.rowId);
-                if (idx < inRow.length - 1) {
-                  const target = inRow[idx + 1]!;
-                  const j = c.modules.findIndex((m) => m.instanceId === target.instanceId);
-                  setPar((p) => {
-                    const mods = [...p.modules];
-                    const from = mods.findIndex((m) => m.id === id);
-                    const [item] = mods.splice(from, 1);
-                    mods.splice(j, 0, item!);
-                    return { ...p, modules: mods };
-                  });
-                }
+                const countInRow = c.modules.filter((m) => m.rowId === placed.rowId).length;
+                if (idx < countInRow - 1) moveModule(id, placed.rowId, idx + 1);
               }}
               disabled={idx >= c.modules.filter((m) => m.rowId === placed.rowId).length - 1}
             >
@@ -327,12 +308,12 @@ function PiecesForModule({ moduleId }: { moduleId: string }): JSX.Element {
   return (
     <div className="kv">
       {mine.map((p) => (
-        <>
-          <dt key={`${p.id}-n`}>{t(p.nameKey)}</dt>
-          <dd key={`${p.id}-v`}>
+        <Fragment key={p.id}>
+          <dt>{t(p.nameKey)}</dt>
+          <dd>
             {p.kind === 'length' ? `${p.w} mm` : `${p.w} × ${p.h} mm`} · {p.count}×
           </dd>
-        </>
+        </Fragment>
       ))}
     </div>
   );
