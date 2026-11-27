@@ -12,7 +12,7 @@ Geprüfte Testdateien: `src/_tests/*.test.ts` (9 Dateien) und `tests/acceptance.
 | `src/_tests/construction.test.ts` | **74** (+2) | `V-G-12` bei zu schmaler Stoffbreite, 60-Modul-Skalierungs- & DAG-Test (< 500 ms) |
 | `src/_tests/pdf.test.ts` | **19** (+2) | 2D-Liang–Barsky-Segmentclipping (diagonal/außerhalb), mehrseitige Anleitungen (> 50 Schritte) |
 | `src/_tests/export.test.ts` | **31** (+2) | `instructionsOnly: true` (ohne Cover/Material/Kacheln), `usableH = 250 mm` Kachelgrenze |
-| `src/_tests/project.test.ts` | **51** (+2) | Prototype-Pollution-Abwehr (`__proto__`, `constructor`), Ablehnung von Schema > 2, `NaN`, negativen Werten, `count < 1` |
+| `src/_tests/project.test.ts` | **51** (+2) | Prototype-Pollution-Abwehr (`__proto__`, `constructor`), Ablehnung von Schema > 3, `NaN`, negativen Werten, `count < 1`; v3-`side`-Migration |
 | `src/_tests/fixes.test.ts` | **12** (+1) | `setParam`-Feldgrenzenklemmung und Ignorieren gefährlicher Schlüssel |
 | `src/_tests/store.test.ts` | **19** (+3) | `propsOpen === false` als Startzustand, `moveModule` inkl. Undo, `rotate` 0→90→180→270→0 |
 | `src/_tests/geometry.test.ts` | **28** | unverändert grün |
@@ -21,11 +21,12 @@ Geprüfte Testdateien: `src/_tests/*.test.ts` (9 Dateien) und `tests/acceptance.
 
 ---
 
-## 2. Erweiterungen der Playwright-E2E-Tests (`tests/acceptance.spec.ts`)
+## 2. Erweiterungen der Playwright-E2E-Tests
 
-Insgesamt **39 / 39** bestandene E2E-Tests in Chromium:
+Insgesamt **45 Tests** (33 in `tests/acceptance.spec.ts` + 12 in `tests/editor-redesign.spec.ts`):
 
 - Korrigierter Drehtest (`M07` 35×45 → 45×35 bleibt fehlerfrei im Raster) plus neuer Test für echten Höhenüberlauf beim Drehen (`M09` 106×46 → 46×106 auf 200-mm-Panel) inklusive 1-Klick-Fix-Reparatur.
 - Skaliergriff-Drag vor **und** nach `90°`-Drehung ohne Aufsummierungs-Multiplikation.
 - Vollständige **Responsive-Matrix** (`390×844`, `430×844`, `768×1024`, `1024×1024`, `1440×900`, `1920×900`) über alle fünf Ansichten + mobile Eigenschaften-Schublade.
 - Verifikation des reinen Anleitungsdrucks (`Anleitung drucken` erzeugt `.steps` ohne `.tilebody` / Kalibrierbox / Materialtabelle).
+- Editor-Redesign-Tests: Starter-Begrüßung, Walkthrough (Hinzufügen, Verschieben, Seitenwechsel, Duplizieren, Undo), Moduswechsel (Einfach ↔ Erweitert).

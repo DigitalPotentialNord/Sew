@@ -516,7 +516,7 @@ test.describe('11 — Responsive Matrix & Anleitung-Druck', () => {
     test(`${label}: keine Überläufe in allen fünf Ansichten`, async ({ page }) => {
       await page.setViewportSize(size);
       await loadSchmuck(page);
-      for (const name of ['Editor', 'Schnittmuster', 'Material', 'Anleitung', 'Projekt']) {
+      for (const name of ['Designen', 'Schnittmuster', 'Materialien', 'Anleitung', 'Projekt']) {
         await tab(page, name).click();
         const metrics = await page.evaluate(() => {
           const docOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;

@@ -124,6 +124,8 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
   const setLibOpen = useStore((s) => s.setLibOpen);
   const warnOpen = useStore((s) => s.session.warnOpen);
   const setWarnOpen = useStore((s) => s.setWarnOpen);
+  const propsOpen = useStore((s) => s.session.propsOpen);
+  const setPropsOpen = useStore((s) => s.setPropsOpen);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -146,8 +148,9 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
       </div>
       <div className="topbar-spacer" />
       <div className="topbar-group mobile-only">
-        <Button icon="menu" onClick={() => setLibOpen(!libOpen)} title={t('mobile.lib')} active={libOpen} />
-        <Button icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'} onClick={() => setWarnOpen(!warnOpen)} active={warnOpen} title={t('warn.title')} />
+        <Button icon="menu" onClick={() => { setPropsOpen(false); setWarnOpen(false); setLibOpen(!libOpen); }} title={t('mobile.lib')} active={libOpen} />
+        <Button icon="sliders" onClick={() => { setLibOpen(false); setWarnOpen(false); setPropsOpen(!propsOpen); }} title={t('mobile.panel')} active={propsOpen} />
+        <Button icon={errors > 0 ? 'error' : warns > 0 ? 'alert' : 'check'} onClick={() => { setLibOpen(false); setPropsOpen(false); setWarnOpen(!warnOpen); }} active={warnOpen} title={t('warn.title')} />
       </div>
       <div className="topbar-group desktop-only">
         <Button icon="save" onClick={save} title={t('top.save')} />
@@ -324,6 +327,8 @@ function EditorWorkspace(): JSX.Element {
   const setLibOpen = useStore((s) => s.setLibOpen);
   const warnOpen = useStore((s) => s.session.warnOpen);
   const setWarnOpen = useStore((s) => s.setWarnOpen);
+  const propsOpen = useStore((s) => s.session.propsOpen);
+  const setPropsOpen = useStore((s) => s.setPropsOpen);
   const selection = useStore((s) => s.session.selection);
   const select = useStore((s) => s.select);
   const isMobile = useIsMobile();
@@ -358,20 +363,11 @@ function EditorWorkspace(): JSX.Element {
         </Sheet>
       ) : null}
 
-      {/* Tablet/Smartphone: Eigenschaften als rechter Drawer, sobald etwas gewählt ist. */}
-      {isMobile && selection.length > 0 ? (
-        <>
-          <div className="sheet-backdrop" onClick={() => select([])} aria-hidden="true" />
-          <div className="props-drawer" role="dialog" aria-modal="false" aria-label={t('mobile.props')}>
-            <div className="sheet-head">
-              <h3>{t('mobile.props')}</h3>
-              <Button icon="close" onClick={() => select([])} ariaLabel={t('mobile.close')} />
-            </div>
-            <div style={{ overflowY: 'auto', flex: 1 }}>
-              <Properties />
-            </div>
-          </div>
-        </>
+      {/* Tablet/Smartphone: Eigenschaften als Sheet (Button-gesteuert oder bei Auswahl). */}
+      {isMobile && (propsOpen || selection.length > 0) ? (
+        <Sheet title={t('mobile.panel')} onClose={() => { setPropsOpen(false); select([]); }}>
+          <Properties />
+        </Sheet>
       ) : null}
     </>
   );

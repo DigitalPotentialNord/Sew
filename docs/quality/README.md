@@ -12,8 +12,8 @@ Gesamtübersicht der Prüfung, Behebung und Verifikation für **Organizer Studio
 | ESLint | `npm run lint` (`eslint .`) | 0 Fehler / 0 Warnungen |
 | Unit & Property | `npm test` (`vitest run`) | **255 / 255** bestanden (9 Dateien, inkl. `fast-check`) |
 | Vorlagen-Verifikation | `npm run verify:templates` | **74 / 74** bestanden (0 Fehler auf allen Vorlagen) |
-| Build & Bundle-Budget | `npm run build:check` | `index`: **407,1 kB** raw / **114,9 kB** gzip (Budget 460/140)<br>`pdf` (lazy): **428,7 kB** raw / **177,1 kB** gzip (Budget 460/200) |
-| Browser-E2E & Responsive | `npx playwright test` | **39 / 39** bestanden (390×844 bis 1920×900) |
+| Build & Bundle-Budget | `npm run build:check` | `index`: **419,6 kB** raw / **117,8 kB** gzip (Budget 460/140)<br>`pdf` (lazy): **428,7 kB** raw / **177,1 kB** gzip (Budget 460/200) |
+| Browser-E2E & Responsive | `npx playwright test` | **45 Tests** (33 Abnahme + 12 Editor-Redesign); CI auf `ubuntu-24.04` gepinnt (Stand: nach Merge, E2E in CI auszuführen) |
 
 ---
 

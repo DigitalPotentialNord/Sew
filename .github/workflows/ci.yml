@@ -19,7 +19,10 @@ concurrency:
 jobs:
   check:
     name: Typecheck · Lint · Test · Build
-    runs-on: ubuntu-latest
+    # ubuntu-24.04 (noble) bewusst gepinnt: ubuntu-latest ist auf 26.04
+    # (resolute) umgezogen, für das Playwrights --with-deps noch keine
+    # apt-Pakete im Microsoft-Repository hat (403 Forbidden, Exit 100).
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: app
@@ -56,7 +59,7 @@ jobs:
 
   e2e:
     name: Abnahmetests (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: app

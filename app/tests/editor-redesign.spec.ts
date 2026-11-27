@@ -96,8 +96,9 @@ test.describe('Kerninteraktionen (Walkthrough)', () => {
     await width.fill('120');
     await width.blur();
     await expect(width).toHaveValue('120');
-    // Die Geometrie folgt dem Wert: das aria-label nennt die neue Breite.
-    await expect(mod).toHaveAttribute('aria-label', /120/);
+    // Die Geometrie folgt dem Wert: M03-Summary ist „RV {breite+20} mm",
+    // bei breite=120 also „RV 140 mm" — das aria-label nennt diese Geometrie.
+    await expect(mod).toHaveAttribute('aria-label', /140/);
   });
 
   test('6 — Materialansicht öffnen (Einkaufsliste)', async ({ page }) => {

@@ -2,7 +2,7 @@
 
 Stand: 26.11.2026 · Spek: `docs/ux/editor-redesign.md` ·
 Implementierung: Branch `arena/e0c5b61b-sew` ·
-Tests: `app/tests/editor-redesign.spec.ts` (12), `app/tests/acceptance.spec.ts` (30)
+Tests: `app/tests/editor-redesign.spec.ts` (12), `app/tests/acceptance.spec.ts` (33)
 
 ---
 
@@ -72,9 +72,9 @@ Aufgeschrieben als Szenario „Ringhalter zum Schmuck-Organizer hinzufügen".
 
 ## 4. Tests und Nachvollziehbarkeit
 
-- **Unit-Tests (228, Vitest):** Konstruktion, Geometrie, Migration, i18n, Findings
+- **Unit-Tests (255, Vitest):** Konstruktion, Geometrie, Migration, i18n, Findings
   — Maßhaltigkeit gesichert. Alle grün.
-- **Acceptance-Tests (30, Playwright):** Kernabläufe (Vorlage, Hinzufügen,
+- **Acceptance-Tests (33, Playwright):** Kernabläufe (Vorlage, Hinzufügen,
   Positionieren, Duplikat, Undo, Export-Blockade, Tabs, Responsiv, Leere).
   **Aktualisiert** für die neue UI (Starter-Dismiss, `nav.*`-Tablabels, Karten-
   Bibliothek, `.atelier-edge`, Modus-Umschalter). Ausgeführt in einer Umgebung
@@ -96,7 +96,7 @@ Aufgeschrieben als Szenario „Ringhalter zum Schmuck-Organizer hinzufügen".
 - **Touch-Echtgerät-Tests:** Touch-Ziel-Größen sind konzeptionell umgesetzt und
   per Media-Query sichergestellt; echte Gerätetests (iPad/Handy) stehen aus.
 - **Playwright-Lauf:** Browser-Download in dieser Sandbox blockiert; Tests müssen
-  in einer Umgebung mit Browsern ausgeführt werden, um „Playwright 30 (bzw. 42)
+  in einer Umgebung mit Browsern ausgeführt werden, um „Playwright 45 (33 + 12)
   grün" zu erfüllen.
 - **Zugänglichkeit (a11y):** Rollen/Labels vorhanden (tabs, spinbuttons,
   buttons); ein vollständiger Screenreader-Audit steht aus.

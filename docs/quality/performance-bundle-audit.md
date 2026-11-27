@@ -18,7 +18,7 @@ Geprüfte Dateien: `app/vite.config.ts`, `app/src/ui/App.tsx`, `app/src/core/con
 
 | Chunk | Vorher | Nachher | Budget (raw / gzip) |
 | --- | --- | --- | --- |
-| `index-*.js` (Initial-Load) | 414,8 kB / 118,0 kB | **407,1 kB / 114,9 kB** | 460 kB / 140 kB |
+| `index-*.js` (Initial-Load) | 414,8 kB / 118,0 kB | **419,6 kB / 117,8 kB** | 460 kB / 140 kB |
 | `pdf-*.js` (Dynamic Import) | 409,3 kB / 170,5 kB | **428,7 kB / 177,1 kB** | 460 kB / 200 kB |
 | `index-*.css` | — | **25,75 kB / 6,02 kB** | — |
 

@@ -810,6 +810,7 @@ table.data tbody tr:hover { background: var(--surface-2); }
   .lib-item { padding: 10px 8px; }
   .finding { padding: 10px var(--s3); }
   .sheet-head { padding: var(--s4); }
+  .mode-toggle button { height: 32px; }
 }
 
 /* Reduzierte Bewegung */
