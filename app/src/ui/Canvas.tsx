@@ -55,6 +55,9 @@ interface DragState {
   moduleId?: string;
   rowId?: string;
   side?: Side;
+  paramKey?: string;
+  startParam?: number;
+  swapped?: boolean;
   startW?: number;
   startH?: number;
   targetRow?: string;
@@ -87,6 +90,7 @@ export function Canvas(): JSX.Element {
   const rotate = useStore((s) => s.rotate);
 
   const wrapRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const [dragPreview, setDragPreview] = useState<{ id: string; dx: number; dy: number } | null>(null);
   const [insert, setInsert] = useState<{ rowId: string; side: Side; x: number } | null>(null);
@@ -151,6 +155,16 @@ export function Canvas(): JSX.Element {
   // ── Koordinaten ───────────────────────────────────────────────────────────
   const toWorld = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } => {
+      const svg = svgRef.current;
+      if (svg) {
+        const r = svg.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          return {
+            x: ((clientX - r.left) / r.width) * worldW - PAD,
+            y: ((clientY - r.top) / r.height) * worldH - PAD,
+          };
+        }
+      }
       const el = wrapRef.current;
       if (!el) return { x: 0, y: 0 };
       const rect = el.getBoundingClientRect();
@@ -158,7 +172,7 @@ export function Canvas(): JSX.Element {
       const py = clientY - rect.top - session.panY;
       return { x: px / scale - PAD, y: py / scale - PAD };
     },
-    [scale, session.panX, session.panY],
+    [scale, session.panX, session.panY, worldH, worldW],
   );
 
   const selected = session.selection;
@@ -254,6 +268,13 @@ export function Canvas(): JSX.Element {
     const placed = c.modules.find((m) => m.instanceId === id);
     const inst = project.modules.find((m) => m.id === id);
     if (!placed || !inst) return;
+    const swapped = inst.rotation % 180 === 90;
+    const map = RESIZE[inst.typeId];
+    // Bei 90°/270°-Drehung sind die Achsen vertauscht: ein horizontaler Griff
+    // ändert den Höhen-Parameter, ein vertikaler den Breiten-Parameter.
+    const key = (axis === 'w') !== swapped ? map.w : map.h;
+    if (!key) return;
+    const startParam = typeof inst.params[key] === 'number' ? (inst.params[key] as number) : 0;
     const w = toWorld(e.clientX, e.clientY);
     dragRef.current = {
       kind: axis === 'w' ? 'resize-w' : 'resize-h',
@@ -262,6 +283,9 @@ export function Canvas(): JSX.Element {
       clientX: e.clientX,
       clientY: e.clientY,
       moduleId: id,
+      paramKey: key,
+      startParam,
+      swapped,
       startW: placed.rect.w,
       startH: placed.rect.h,
     };
@@ -325,24 +349,24 @@ export function Canvas(): JSX.Element {
       return;
     }
 
-    if ((d.kind === 'resize-w' || d.kind === 'resize-h') && d.moduleId) {
+    if ((d.kind === 'resize-w' || d.kind === 'resize-h') && d.moduleId && d.paramKey && d.startParam !== undefined) {
       const inst = project.modules.find((m) => m.id === d.moduleId);
       if (!inst) return;
-      const map = RESIZE[inst.typeId];
-      const key = d.kind === 'resize-w' ? map.w : map.h;
-      if (!key) return;
+      const key = d.paramKey;
       const field = moduleDef(inst.typeId).fields.find((f) => f.key === key);
       const min = field?.min ?? 5;
       const max = field?.max ?? 400;
-      const cur = typeof inst.params[key] === 'number' ? (inst.params[key] as number) : 0;
+      const cur = d.startParam;
 
-      if (d.kind === 'resize-h' && inst.typeId === 'M07') {
+      if (inst.typeId === 'M07' && key === 'laenge') {
         const delta = (w.y - d.startY) * 2;
         const next = clamp(Math.round((cur + delta) / 5) * 5, min, max);
         if (next !== cur) setPar((p) => ({ ...p, modules: p.modules.map((m) => (m.id === inst.id ? { ...m, params: { ...m.params, [key]: next } } : m)) }));
         return;
       }
-      const delta = d.kind === 'resize-w' ? w.x - d.startX : w.y - d.startY;
+      // Bei gedrehten Modulen (swapped) ist ein horizontaler Griff ein Höhen-
+      // delta und umgekehrt — die Achse folgt dem gespeicherten paramKey.
+      const delta = (d.kind === 'resize-w') !== (d.swapped ?? false) ? w.x - d.startX : w.y - d.startY;
       const raw = cur + delta;
       const step = field?.step ?? 1;
       const next = clamp(Math.round(raw / step) * step, min, max);
@@ -465,6 +489,7 @@ export function Canvas(): JSX.Element {
           }}
         >
           <svg
+            ref={svgRef}
             className="canvas-svg"
             width={worldW * scale}
             height={worldH * scale}

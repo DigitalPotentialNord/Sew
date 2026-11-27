@@ -99,3 +99,41 @@ describe('safe (WinAnsi)', () => {
     expect(safe('a\nb\tc')).toBe('a b c');
   });
 });
+
+describe('2D Liang–Barsky & mehrseitige Anleitung (Regressions)', () => {
+  it('schneidet diagonale Segmente exakt am Kachelfenster', () => {
+    expect(clipSegment([0, 0], [140, 70], win)).toEqual([[20, 10], [120, 60]]);
+    expect(clipSegment([0, 60], [120, 0], win)).toEqual([[20, 50], [100, 10]]);
+    expect(clipSegment([0, 0], [10, 5], win)).toBeNull();
+  });
+
+  it('bricht lange Anleitungen (> 50 Schritte) ohne Seitenverlust auf Folgeseiten um', async () => {
+    const base = buildTemplate('strick');
+    const many = {
+      ...base,
+      modules: Array.from({ length: 24 }, (_, i) => ({
+        ...base.modules[i % base.modules.length]!,
+        id: `big_${i}`,
+      })),
+    };
+    const c = construct(many);
+    const bytes = await buildPdf(c, {
+      title: 'Grosses Projekt',
+      subtitle: 'Organizer Studio',
+      calibration: '50 mm',
+      calibrationHint: 'Messen.',
+      materials: c.materials.map((m) => ({ label: m.kind, amount: m.display ?? '', certainty: m.certainty })),
+      cutList: c.pieces
+        .filter((p) => p.kind === 'cut')
+        .map((p) => ({ label: p.id, size: `${p.w} x ${p.h}`, count: `${p.count}x`, tiles: '1' })),
+      instructions: c.operations.map((o) => ({ index: o.index, phase: o.phase, text: `Schritt ${o.index}: ${o.titleKey}` })),
+      footer: 'Footer',
+    });
+    const { PDFDocument } = await import('pdf-lib');
+    const doc = await PDFDocument.load(bytes);
+    const { tilePiece } = await import('../core/export');
+    const tileCount = c.pieces.filter((p) => p.kind === 'cut').reduce((n, p) => n + tilePiece(p).length, 0);
+    // Erwartet mindestens Cover + Material + Zuschnitt + >=2 Anleitungsseiten + Kacheln
+    expect(doc.getPageCount()).toBeGreaterThan(tileCount + 4);
+  });
+});

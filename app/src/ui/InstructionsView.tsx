@@ -32,28 +32,30 @@ export function InstructionsView({ onPrint }: { onPrint: () => void }): JSX.Elem
         </div>
 
         <Panel title={t('instr.matTitle')} flush>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th style={{ textAlign: 'right' }}>Menge</th>
-                <th>Art</th>
-              </tr>
-            </thead>
-            <tbody>
-              {c.materials.map((m, i) => (
-                <tr key={i}>
-                  <td>{t(m.labelKey) === m.labelKey ? t(`mat.${m.kind}`) : t(m.labelKey)}</td>
-                  <td className="num">{m.display ?? formatAmount(m.amount, m.unit)}</td>
-                  <td>
-                    <span className={`badge ${m.certainty === 'exact' ? 'exact' : 'est'}`}>
-                      {m.certainty === 'exact' ? t('mat.tab.exact') : t('mat.tab.estimated')}
-                    </span>
-                  </td>
+          <div className="table-scroll">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Material</th>
+                  <th style={{ textAlign: 'right' }}>Menge</th>
+                  <th>Art</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {c.materials.map((m, i) => (
+                  <tr key={i}>
+                    <td>{t(m.labelKey) === m.labelKey ? t(`mat.${m.kind}`) : t(m.labelKey)}</td>
+                    <td className="num">{m.display ?? formatAmount(m.amount, m.unit)}</td>
+                    <td>
+                      <span className={`badge ${m.certainty === 'exact' ? 'exact' : 'est'}`}>
+                        {m.certainty === 'exact' ? t('mat.tab.exact') : t('mat.tab.estimated')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Panel>
 
         <Panel title={`${t('pattern.calibration')}`}>

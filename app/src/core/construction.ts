@@ -201,6 +201,22 @@ function checkContext(p: Project, drawWide: boolean, freeAlongRow: number, rowRo
     : { ...base, channelFreeMm: mm(freeAlongRow), rowHeightMm: mm(rowRoom) };
 }
 
+/** Bei 90°/270°-Drehung werden Höhen- und Breiten-Fixes vertauscht:
+ *  „Mäppchen breiter machen" wird zu „Mäppchen höher machen" und umgekehrt,
+ *  damit der angebotene Fix zur gedrehten Geometrie passt. */
+function orientFinding(f: Finding, swap: boolean, p: Project): Finding {
+  if (!swap || !f.fix) return f;
+  if (f.fix.kind === 'widenBase') {
+    const delta = Math.max(1, f.fix.toMm - p.base.widthMm);
+    return { ...f, fix: { kind: 'growHeight', toMm: Math.round(p.base.heightMm + delta) } };
+  }
+  if (f.fix.kind === 'growHeight') {
+    const delta = Math.max(1, f.fix.toMm - p.base.heightMm);
+    return { ...f, fix: { kind: 'widenBase', toMm: Math.round(p.base.widthMm + delta) } };
+  }
+  return f;
+}
+
 // ─── Layout ──────────────────────────────────────────────────────────────────
 // Seit v3 wird je Innenfläche (`side`) platziert: linke Module auf dem linken
 // Flap [0, width], rechte auf dem rechten Flap [width+spine, 2·width+spine].
@@ -287,7 +303,7 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
         summary: def.summary(inst.params),
       });
 
-      findings.push(...def.validate(inst.params, checkCtx, inst.id));
+      findings.push(...def.validate(inst.params, checkCtx, inst.id).map((f) => orientFinding(f, swap, p)));
       if (isRight) xRight += dim.w;
       else xLeft += dim.w;
     }
@@ -451,12 +467,26 @@ function buildPieces(p: Project, modules: readonly PlacedModule[]): ComputedPiec
 
   const mk = (spec: PieceSpec, sourceModuleId?: string): ComputedPiece => {
     const cutRect = rect(0, 0, spec.w, spec.h);
-    const netRect = rect(nz, nz, Math.max(0, spec.w - 2 * nz), Math.max(0, spec.h - 2 * nz));
+    const hasSA = spec.kind === 'cut' && (spec.netW < spec.w || spec.netH < spec.h);
+    const nx =
+      spec.netX !== undefined
+        ? spec.netX
+        : hasSA
+          ? Math.max(0, Math.round((spec.w - spec.netW) / 2))
+          : 0;
+    const ny =
+      spec.netY !== undefined
+        ? spec.netY
+        : hasSA
+          ? Math.max(0, Math.round((spec.h - spec.netH) / 2))
+          : 0;
+    const netRect = spec.kind === 'cut' ? rect(nx, ny, Math.max(0, spec.netW), Math.max(0, spec.netH)) : rect(0, 0, spec.w, spec.h);
+    const radius = spec.role === 'panel' || spec.role === 'lining' ? p.base.cornerRadiusMm : 0;
     return {
       ...spec,
       netRect,
       cutRect,
-      radius: p.base.cornerRadiusMm,
+      radius,
       ...(sourceModuleId ? { sourceModuleId } : {}),
     };
   };
@@ -509,21 +539,66 @@ function buildPieces(p: Project, modules: readonly PlacedModule[]): ComputedPiec
       seamAllowanceMm: nz,
     };
     const specs = def.pieces(m.params, ctx, m.instanceId);
-    // Rotation 90/270 tauscht die Maße des entstehenden Teils
+    // Rotation (90/180/270) dreht Geometrie, Nähfeld (netX/netY) und Bruchkante exakt mit
     for (const spec of specs) {
-      if (spec.kind === 'cut' && m.rotation % 180 === 90) {
-        pieces.push(
-          mk(
-            {
-              ...spec,
-              w: spec.h,
-              h: spec.w,
-              netW: spec.netH,
-              netH: spec.netW,
-            },
-            m.instanceId,
-          ),
-        );
+      if (spec.kind === 'cut' && m.rotation !== 0) {
+        const hasSA = spec.netW < spec.w || spec.netH < spec.h;
+        const nx0 = spec.netX ?? (hasSA ? Math.max(0, Math.round((spec.w - spec.netW) / 2)) : 0);
+        const ny0 = spec.netY ?? (hasSA ? Math.max(0, Math.round((spec.h - spec.netH) / 2)) : 0);
+        const fold90: Record<NonNullable<PieceSpec['foldEdge']>, NonNullable<PieceSpec['foldEdge']>> = {
+          top: 'right', right: 'bottom', bottom: 'left', left: 'top', none: 'none',
+        };
+        const fold180: Record<NonNullable<PieceSpec['foldEdge']>, NonNullable<PieceSpec['foldEdge']>> = {
+          top: 'bottom', right: 'left', bottom: 'top', left: 'right', none: 'none',
+        };
+        const fold270: Record<NonNullable<PieceSpec['foldEdge']>, NonNullable<PieceSpec['foldEdge']>> = {
+          top: 'left', left: 'bottom', bottom: 'right', right: 'top', none: 'none',
+        };
+        if (m.rotation === 90) {
+          pieces.push(
+            mk(
+              {
+                ...spec,
+                w: spec.h,
+                h: spec.w,
+                netW: spec.netH,
+                netH: spec.netW,
+                netX: mm(Math.max(0, spec.h - ny0 - spec.netH)),
+                netY: mm(nx0),
+                foldEdge: fold90[spec.foldEdge ?? 'none'],
+              },
+              m.instanceId,
+            ),
+          );
+        } else if (m.rotation === 180) {
+          pieces.push(
+            mk(
+              {
+                ...spec,
+                netX: mm(Math.max(0, spec.w - nx0 - spec.netW)),
+                netY: mm(Math.max(0, spec.h - ny0 - spec.netH)),
+                foldEdge: fold180[spec.foldEdge ?? 'none'],
+              },
+              m.instanceId,
+            ),
+          );
+        } else {
+          pieces.push(
+            mk(
+              {
+                ...spec,
+                w: spec.h,
+                h: spec.w,
+                netW: spec.netH,
+                netH: spec.netW,
+                netX: mm(ny0),
+                netY: mm(Math.max(0, spec.w - nx0 - spec.netW)),
+                foldEdge: fold270[spec.foldEdge ?? 'none'],
+              },
+              m.instanceId,
+            ),
+          );
+        }
       } else {
         pieces.push(mk(spec, m.instanceId));
       }
@@ -552,6 +627,9 @@ export function packFabric(
   expanded.sort((a, b) => b.h - a.h || b.w - a.w || a.id.localeCompare(b.id));
 
   const wastePct = 22;
+  if (expanded.length === 0) {
+    return { pieces: [], rows: 0, usedHeightMm: mm(0), meters: 0, wastePct };
+  }
   const usableWidth = fabricWidthMm * 0.98;
   let shelfY = 0;
   let shelfH = 0;
@@ -578,7 +656,7 @@ export function packFabric(
   }
 
   const usedHeight = mm(shelfY + shelfH);
-  const meters = Math.ceil(((usedHeight * (1 + wastePct / 2 / 100)) / 1000) * 100) / 100;
+  const meters = Math.ceil(((usedHeight * (1 + wastePct / 100)) / 1000) * 100) / 100;
   return { pieces: items, rows: rows + 1, usedHeightMm: usedHeight, meters, wastePct };
 }
 
@@ -643,16 +721,45 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
     });
   }
 
-  // Längenmaterial exakt
+  // Zusatzmaterialien der Module (Knöpfe, Ösen, Klett, exakte Band/RV-Specs …)
+  // Pro Modul: Wenn extraMaterials eine Materialart (z. B. zipper/elastic/webbing)
+  // mit konkreter Spezifikation deklariert, übernimmt diese die Stückliste und
+  // zieht ihre `sources` aus den Längen-Teilen desselben Moduls — so werden
+  // RV (M03), Gummi (M04) und Gurtband (M05) nie doppelt gezählt.
+  const ctx0 = baseContext(p);
+  const coveredByExtra = new Set<string>();
+  const modLengthSources = new Map<string, string[]>();
+  for (const pc of pieces) {
+    if (pc.kind !== 'length' || !pc.sourceModuleId) continue;
+    const mkKey = `${pc.sourceModuleId}:${pc.material}`;
+    const arr = modLengthSources.get(mkKey);
+    if (arr) arr.push(pc.id);
+    else modLengthSources.set(mkKey, [pc.id]);
+  }
+
+  const extra: (ExtraMaterial & { sources: string[] })[] = [];
+  for (const m of p.modules) {
+    const def = moduleDef(m.typeId);
+    if (def.extraMaterials) {
+      for (const em of def.extraMaterials(m.params, ctx0)) {
+        const mkKey = `${m.id}:${em.kind}`;
+        coveredByExtra.add(mkKey);
+        extra.push({ ...em, sources: modLengthSources.get(mkKey) ?? [] });
+      }
+    }
+  }
+
+  // Längenmaterial (nur Teile, die nicht durch extraMaterials desselben Moduls abgedeckt sind)
   const lengthPieces = pieces.filter((pc) => pc.kind === 'length');
   const grouped = new Map<string, { mat: MaterialKind; total: number; certainty: Certainty; sources: string[] }>();
   for (const pc of lengthPieces) {
+    if (pc.sourceModuleId && coveredByExtra.has(`${pc.sourceModuleId}:${pc.material}`)) continue;
     const key = `${pc.material}:${pc.id}`;
     const prev = grouped.get(key);
     const certainty: Certainty = pc.certainty;
     if (prev) {
       prev.total += pc.w * pc.count;
-      prev.sources.push(pc.id);
+      if (!prev.sources.includes(pc.id)) prev.sources.push(pc.id);
       if (certainty === 'estimated') prev.certainty = 'estimated';
     } else {
       grouped.set(key, { mat: pc.material, total: pc.w * pc.count, certainty, sources: [pc.id] });
@@ -673,27 +780,20 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
     });
   }
 
-  // Zusatzmaterialien der Module (Knöpfe, Ösen, Klett …)
-  const extra: ExtraMaterial[] = [];
-  for (const m of p.modules) {
-    const def = moduleDef(m.typeId);
-    if (def.extraMaterials) {
-      extra.push(...def.extraMaterials(m.params, baseContext(p)));
-    }
-  }
   // Zusatzmaterial gruppiert nach Art UND Spezifikation. Punktmaterial (Stück) wird
   // addiert, Längenmaterial wird zu EINEM zusammenhängenden Stück zusammengefasst:
   // zwei Reißverschlüsse à 170 mm sind ein Kauf von 340 mm, nicht 340 mm »exakt«
   // in einem Zug — deshalb auch der Hinweis auf die Teilstücke in der Grundlage.
-  const extraGroups = new Map<string, ExtraMaterial & { amount: number; parts: number }>();
+  const extraGroups = new Map<string, ExtraMaterial & { amount: number; parts: number; sources: string[] }>();
   for (const e of extra) {
     const key = `${e.kind}:${e.spec}`;
     const prev = extraGroups.get(key);
     if (prev) {
       prev.amount += e.amount;
       prev.parts += 1;
+      for (const s of e.sources) if (!prev.sources.includes(s)) prev.sources.push(s);
     } else {
-      extraGroups.set(key, { ...e, parts: 1 });
+      extraGroups.set(key, { ...e, parts: 1, sources: [...e.sources] });
     }
   }
   for (const [, e] of [...extraGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
@@ -710,7 +810,7 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       basisKey: partial ? 'basis.summe' : e.basisKey,
       basisValues: partial ? { teile: e.parts, summe: Math.round(e.amount) } : e.basisValues,
       ...(e.purchaseHintKey ? { purchaseHintKey: e.purchaseHintKey } : {}),
-      sources: [],
+      sources: e.sources,
     });
   }
 

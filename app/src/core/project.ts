@@ -10,7 +10,13 @@ import { SCHEMA_VERSION, type Instance, type Project, type ProjectBase, type Row
 import type { ModuleTypeId, Params } from './types';
 
 // ─── Zod ─────────────────────────────────────────────────────────────────────
-export const paramsSchema = z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])); // zod v4: Schlüsselschema explizit
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export const paramsSchema = z
+  .record(z.string(), z.union([z.number().finite(), z.string().max(120), z.boolean()]))
+  .refine((obj) => Object.keys(obj).every((k) => !FORBIDDEN_KEYS.has(k)), {
+    message: 'Ungültiger Parameter-Schlüssel.',
+  }); // zod v4: Schlüsselschema explizit
 
 export const instanceSchema = z.object({
   id: z.string().min(1),
@@ -59,7 +65,28 @@ export interface ValidationIssue {
   readonly message: string;
 }
 
+function findForbiddenKey(val: unknown): string | null {
+  if (typeof val !== 'object' || val === null) return null;
+  if (Array.isArray(val)) {
+    for (const item of val) {
+      const hit = findForbiddenKey(item);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  for (const k of Object.getOwnPropertyNames(val)) {
+    if (FORBIDDEN_KEYS.has(k)) return k;
+    const hit = findForbiddenKey((val as Record<string, unknown>)[k]);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export function validateProject(input: unknown): { ok: true; project: Project } | { ok: false; issues: ValidationIssue[] } {
+  const forbidden = findForbiddenKey(input);
+  if (forbidden) {
+    return { ok: false, issues: [{ path: forbidden, message: `Ungültiger Schlüssel: ${forbidden}.` }] };
+  }
   const parsed = projectSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -69,7 +96,13 @@ export function validateProject(input: unknown): { ok: true; project: Project } 
   }
   const p = parsed.data as unknown as Project;
   const issues: ValidationIssue[] = [];
-  // Referenzintegrität (Invarianten I1–I3)
+  if (p.schemaVersion < 1 || p.schemaVersion > SCHEMA_VERSION) {
+    issues.push({
+      path: 'schemaVersion',
+      message: `Schema-Version ${p.schemaVersion} wird nicht unterstützt (erwartet ≤ ${SCHEMA_VERSION}).`,
+    });
+  }
+  // Referenzintegrität (Invarianten I1–I3) und plausible Parameterwerte
   const ids = new Set(p.modules.map((m) => m.id));
   if (ids.size !== p.modules.length) issues.push({ path: 'modules', message: 'Modul-IDs sind nicht eindeutig.' });
   const rowIds = new Set(p.rows.map((r) => r.id));
@@ -77,6 +110,19 @@ export function validateProject(input: unknown): { ok: true; project: Project } 
     if (!rowIds.has(m.rowId)) issues.push({ path: `modules.${m.id}.rowId`, message: 'Zeile existiert nicht.' });
     if (!Object.prototype.hasOwnProperty.call(moduleTypes, m.typeId)) {
       issues.push({ path: `modules.${m.id}.typeId`, message: `Unbekannter Modultyp ${m.typeId}.` });
+      continue;
+    }
+    const def = moduleDef(m.typeId);
+    for (const [k, v] of Object.entries(m.params)) {
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v) || v < 0 || v > 5000) {
+          issues.push({ path: `modules.${m.id}.params.${k}`, message: `Wert außerhalb zulässiger Grenzen: ${v}.` });
+        }
+        const f = def.fields.find((x) => x.key === k);
+        if (f?.kind === 'count' && v < 1) {
+          issues.push({ path: `modules.${m.id}.params.${k}`, message: `Anzahl ${k} muss ≥ 1 sein.` });
+        }
+      }
     }
   }
   if (issues.length > 0) return { ok: false, issues };
@@ -89,10 +135,12 @@ const moduleTypes: Record<string, true> = {
 };
 
 export function migrate(raw: unknown): unknown {
-  if (typeof raw !== 'object' || raw === null) return raw;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
   const file = raw as Record<string, unknown>;
-  const inner = (file.project ?? raw) as Record<string, unknown>;
-  const version = typeof inner.schemaVersion === 'number' ? inner.schemaVersion : 1;
+  const innerRaw = file.project !== undefined ? file.project : raw;
+  if (typeof innerRaw !== 'object' || innerRaw === null || Array.isArray(innerRaw)) return raw;
+  const inner = innerRaw as Record<string, unknown>;
+  const version = typeof inner.schemaVersion === 'number' && Number.isInteger(inner.schemaVersion) ? inner.schemaVersion : 1;
   let p = { ...inner };
   if (version < 2) {
     // v1 → v2: `rows` kam hinzu; Module ohne rowId landen in einer Sammelzeile
@@ -106,7 +154,7 @@ export function migrate(raw: unknown): unknown {
           ...m,
         }))
       : [];
-    p = { ...p, schemaVersion: 2, rows, modules: mods };
+    p = { ...p, schemaVersion: SCHEMA_VERSION, rows, modules: mods };
   }
   if (version < 3) {
     // v2 → v3: jedes Modul erhält eine Innenfläche (`side`). Nicht-destruktiv:
@@ -118,9 +166,10 @@ export function migrate(raw: unknown): unknown {
           ...m,
         }))
       : [];
-    p = { ...p, schemaVersion: 3, modules: mods };
+    p = { ...p, schemaVersion: SCHEMA_VERSION, modules: mods };
   }
-  return { ...(file.project ? file : {}), ...p, schemaVersion: SCHEMA_VERSION } as unknown as Project;
+  const nextVersion = version > SCHEMA_VERSION ? version : SCHEMA_VERSION;
+  return { ...p, schemaVersion: nextVersion } as unknown as Project;
 }
 
 // ─── IDs ─────────────────────────────────────────────────────────────────────
@@ -191,6 +240,8 @@ export function removeInstance(p: Project, ids: readonly string[]): Project {
 }
 
 export function updateParams(p: Project, id: string, key: string, value: number | string | boolean): Project {
+  if (FORBIDDEN_KEYS.has(key)) return p;
+  if (typeof value === 'number' && !Number.isFinite(value)) return p;
   return {
     ...p,
     updatedAt: nowIso(),
@@ -268,6 +319,10 @@ export function toFile(p: Project): ProjectFile {
 }
 
 export function fromFile(raw: unknown): { ok: true; project: Project } | { ok: false; issues: ValidationIssue[] } {
+  const forbidden = findForbiddenKey(raw);
+  if (forbidden) {
+    return { ok: false, issues: [{ path: forbidden, message: `Ungültiger Schlüssel: ${forbidden}.` }] };
+  }
   const migrated = migrate(raw);
   return validateProject(migrated);
 }

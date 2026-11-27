@@ -12,7 +12,6 @@ function useIsMobile(): boolean {
   return mobile;
 }
 import { buildPrintHtml, downloadText, fileName, tilePiece, toSvg, type PrintStrings } from '../core/export';
-import { buildPdf } from '../core/pdf';
 import { useStore } from '../state/store';
 import { formatAmount } from '../core/construction';
 import { t } from '../i18n/de';
@@ -240,6 +239,7 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
         })),
         footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
       };
+      const { buildPdf } = await import('../core/pdf');
       const bytes = await buildPdf(c, strings);
       downloadText(fileName(project.name, 'schnittmuster', 'pdf'), 'application/pdf', bytes);
       const pages = c.pieces.filter((pc) => pc.kind === 'cut').reduce((n, pc) => n + tilePiece(pc).length, 0) + 4;
@@ -520,9 +520,12 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
     .filter((f) => f.severity === 'warn' && !state.session.dismissed.includes(findingKey(f)))
     .map((f) => t(`rule.${f.ruleId}.detail`, f.values));
 
-  const html = buildPrintHtml(c, project.name, strings, materialLines, mode === 'instructions' ? instructions : instructions, openWarnings);
+  const html = buildPrintHtml(c, project.name, strings, materialLines, instructions, openWarnings, {
+    instructionsOnly: mode === 'instructions',
+  });
 
   const w = window.open('', '_blank', 'width=900,height=1200');
+  if (w) w.opener = null;
   if (!w) {
     // Fallback: Datei herunterladen
     downloadText(fileName(project.name, 'anleitung', 'html'), 'text/html', html);
