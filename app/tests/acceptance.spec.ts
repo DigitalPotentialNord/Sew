@@ -297,7 +297,7 @@ test.describe('5 — Schnittmuster und Export', () => {
     for await (const chunk of stream) text += chunk.toString();
     const json = JSON.parse(text) as { format: string; schemaVersion: number; project: { modules: unknown[] } };
     expect(json.format).toBe('organizer-studio/project');
-    expect(json.schemaVersion).toBe(2);
+    expect(json.schemaVersion).toBe(3);
     expect(json.project.modules.length).toBe(5);
     expect(text).not.toContain('projectHash');
   });
