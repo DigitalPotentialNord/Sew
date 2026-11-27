@@ -9,6 +9,7 @@ import { mm, clamp, type Mm } from './geometry';
 import { PRACTICE } from './practice';
 import type {
   Finding,
+  LayoutContext,
   ModuleDef,
   ModuleTypeId,
   ParamValue,
@@ -28,6 +29,28 @@ const str = (p: Params, k: string, fallback = ''): string => {
 const bool = (p: Params, k: string, fallback = false): boolean => {
   const v = p[k];
   return typeof v === 'boolean' ? v : fallback;
+};
+
+/**
+ * Höhen-Fix für Regeln »Modul zu hoch«: `setParam`, wenn das Feld den
+ * verfügbaren Platz erreicht, ohne sein Minimum zu unterschreiten — sonst
+ * wird `growHeight` vorgeschlagen. Ein Fix, der auf 0 klemmt, behebt das
+ * Finding nicht und wird nicht angeboten.
+ */
+const heightFix = (
+  ctx: LayoutContext,
+  moduleId: string,
+  key: string,
+  current: number,
+  fieldMin: number,
+  ratio = 1,
+): Finding['fix'] => {
+  const settable = Math.floor(ctx.rowHeightMm * ratio);
+  if (settable >= fieldMin) return { kind: 'setParam', moduleId, key, value: settable };
+  return {
+    kind: 'growHeight',
+    toMm: Math.ceil(ctx.panelHeightMm - ctx.rowHeightMm + current / ratio) + 20,
+  };
 };
 
 const base = (nz: number, key: string, nameKey: string, w: number, h: number, material: PieceSpec['material'], extra: Partial<PieceSpec> = {}): PieceSpec => ({
@@ -158,7 +181,7 @@ const M01: ModuleDef = {
         severity: 'error',
         subject: { kind: 'module', id },
         values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
-        fix: { kind: 'setParam', moduleId: id, key: 'hoehe', value: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
         dismissible: false,
       });
     }
@@ -262,6 +285,17 @@ const M02: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 80);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M02-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
         dismissible: false,
       });
     }
@@ -377,8 +411,18 @@ const M03: ModuleDef = {
         severity: 'warn',
         subject: { kind: 'module', id },
         values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
-        fix: { kind: 'setParam', moduleId: id, key: 'hoehe', value: Math.round(ctx.rowHeightMm * 0.8) },
+        fix: heightFix(ctx, id, 'hoehe', h, 50, 0.9),
         dismissible: true,
+      });
+    }
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M03-04',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 50),
+        dismissible: false,
       });
     }
     return out;
@@ -970,6 +1014,17 @@ const M09: ModuleDef = {
         dismissible: true,
       });
     }
+    const h = num(p, 'hoehe', 55);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M09-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -1047,6 +1102,17 @@ const M10: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 45);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M10-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
         dismissible: false,
       });
     }
@@ -1141,6 +1207,17 @@ const M11: ModuleDef = {
         dismissible: false,
       });
     }
+    const h = num(p, 'hoehe', 120);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M11-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 60),
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -1225,6 +1302,17 @@ const M12: ModuleDef = {
         subject: { kind: 'module', id },
         values: { breite: Math.round(w), frei: Math.round(ctx.channelFreeMm) },
         fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (w - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 120);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M12-03',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 40),
         dismissible: false,
       });
     }
@@ -1380,6 +1468,17 @@ const M14: ModuleDef = {
         dismissible: false,
       });
     }
+    const h = num(p, 'hoehe', 90);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M14-02',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 30),
+        dismissible: false,
+      });
+    }
     return out;
   },
   draw: (p, w, h) => {
@@ -1419,19 +1518,31 @@ const M15: ModuleDef = {
     return [base(nz, 'massband-fach', 'piece.massband-fach', num(p, 'breite', 60) + 2 * nz, num(p, 'hoehe', 40) + 2 * nz, 'fabric', { noteKey: 'note.massband' })];
   },
   operations: (_p, _ctx, id) => [{ kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { hoehe: 40 } }],
-  validate: (p, ctx, id) =>
-    num(p, 'breite', 60) > ctx.channelFreeMm
-      ? [
-          {
-            ruleId: 'V-M15-01',
-            severity: 'error',
-            subject: { kind: 'module', id },
-            values: { breite: Math.round(num(p, 'breite', 60)), frei: Math.round(ctx.channelFreeMm) },
-            fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (num(p, 'breite', 60) - ctx.channelFreeMm) },
-            dismissible: false,
-          },
-        ]
-      : [],
+  validate: (p, ctx, id) => {
+    const out: Finding[] = [];
+    if (num(p, 'breite', 60) > ctx.channelFreeMm) {
+      out.push({
+        ruleId: 'V-M15-01',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { breite: Math.round(num(p, 'breite', 60)), frei: Math.round(ctx.channelFreeMm) },
+        fix: { kind: 'widenBase', toMm: ctx.panelWidthMm + (num(p, 'breite', 60) - ctx.channelFreeMm) },
+        dismissible: false,
+      });
+    }
+    const h = num(p, 'hoehe', 40);
+    if (h > ctx.rowHeightMm) {
+      out.push({
+        ruleId: 'V-M15-02',
+        severity: 'error',
+        subject: { kind: 'module', id },
+        values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
+        fix: heightFix(ctx, id, 'hoehe', h, 25),
+        dismissible: false,
+      });
+    }
+    return out;
+  },
   draw: (_p, w, h) => [
     { t: 'rect', x: 0, y: 0, w, h, style: 'pocket' },
     { t: 'circle', cx: w / 2, cy: h / 2, r: Math.min(w, h) * 0.32, style: 'ring' },
@@ -1476,11 +1587,11 @@ const M16: ModuleDef = {
     if (h > ctx.rowHeightMm) {
       out.push({
         ruleId: 'V-M16-01',
-        severity: 'warn',
+        severity: 'error',
         subject: { kind: 'module', id },
         values: { hoehe: Math.round(h), panel: Math.round(ctx.rowHeightMm) },
-        fix: { kind: 'setParam', moduleId: id, key: 'laenge', value: Math.round(ctx.rowHeightMm) },
-        dismissible: true,
+        fix: heightFix(ctx, id, 'laenge', h, 80),
+        dismissible: false,
       });
     }
     if (num(p, 'breite', 60) > ctx.channelFreeMm) {

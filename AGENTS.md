@@ -381,7 +381,12 @@ umbenannt (Bestanddaten, Tests, Hashes):
 | M16 | Scherenhalter | Aufhänger |
 
 Weitere bewusste Lücken (Stand Phase 3): V-G-11 nicht implementiert;
-`M07/M08`-Randplatzierung genähert; gedrehte Module, die ihre Zeile überragen,
+`M07/M08/M13` werden einheitlich als Zeilenmodule platziert — die Kantenlage
+(`placement.kind: 'edge'`) ist bewusst nur eine Näherung, kein Sonderfall mit
+eigener Geometrie (die `placement`-Angabe ist rein informativ). Ihre Maßhaltigkeit
+ist über V-G-13 bzw. die Modulregeln abgedeckt; Module mit geklemmter Zeichnung
+haben zusätzlich eigene Höhenregeln (V-Mxx-…), die den Export bei Überstand
+sperren. Gedrehte Module, die ihre Zeile überragen,
 werden gemeldet statt umgelegt; `PatternView` nutzt `as Mm`-Casts; PDF-Anleitung
 prüft nicht jede Zeile gegen den Seitenumbruch.
 

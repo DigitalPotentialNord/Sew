@@ -238,9 +238,18 @@ function layout(p: Project): { rows: PlacedRow[]; modules: PlacedModule[]; findi
     return { row, insts, dims, height };
   });
 
-  // Zeilen sind in der Reihenfolge des Projekts angeordnet; ein gedrehtes Modul ist
-  // breiter als seine Zeile hoch ist. Damit dieser Überhang ehrlich gemeldet wird,
-  // steht die Überlappung im Befund — nicht als stille Abschneidung.
+// Zeilen sind in der Reihenfolge des Projekts angeordnet; ein gedrehtes Modul ist
+// breiter als seine Zeile hoch ist. Damit dieser Überhang ehrlich gemeldet wird,
+// steht die Überlappung im Befund — nicht als stille Abschneidung.
+//
+// Platzierungs-Mapping (alle Modultypen einheitlich): Module mit
+// `placement: { kind: 'edge' }` (M07, M08, M13) werden wie Zeilenmodule in der
+// Reihe platziert; ihre Lage »an der Kante« ist derzeit nur eine Näherung
+// (siehe AGENTS.md §7 und docs/architecture/positioning-model-decision.md §6).
+// Es gibt absichtlich keine Sonderplatzierung — so verbraucht jedes Modul
+// nachvollziehbar Zeilenbudget und wird von denselben Regeln (V-G-01/13/14,
+// Modulregeln) geprüft. Ihre Maße sind über die unbestimmte Zeilenhöhe bzw.
+// über V-G-13 abgedeckt; ein Export mit überstehendem Teil ist gesperrt.
   const rowTop = new Map<string, number>();
   let acc = PRACTICE.edgeMarginMm;
   for (const r of raw) {

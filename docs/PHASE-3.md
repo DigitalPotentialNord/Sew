@@ -137,7 +137,7 @@ Die Regel-IDs (V-M01…M16) folgen weiter der Spezifikation, nicht der Belegung.
 | --- | --- | --- |
 | Ein gedrehtes Modul, das die Zeile überragt, wird gemeldet, aber nicht automatisch umgelegt | Nutzer muss selbst umbauen | Auto-Relayout braucht eine Prioritätsregel, die die Spezifikation nicht hergibt |
 | V-G-11 fehlt | eine Regel ohne Prüfung | Kriterium in der Spezifikation nicht eindeutig |
-| M07/M08 Randplatzierung angenähert | Maße können um die Nahtzugabe abweichen | Randfall ohne Vorlage, die ihn zeigt |
+| M07/M08/M13 Randplatzierung einheitlich als Zeilenmodul | Kantenlage nur Näherung (`placement.kind` rein informativ); Zeilenbudget wird beansprucht wie bei jedem Modul; Maße über V-G-13/Modulregeln abgedeckt | Randfall ohne Vorlage, die eine eigene Kanten-Geometrie zeigt |
 | `PatternView` nutzt `as Mm`-Casts | Typ nicht durchgängig gebrandet | Aufräumarbeit ohne Funktionsgewinn |
 | PDF-Anleitung: eine Seite kann bei sehr vielen Schritten knapp werden | Fortsetzungsseite greift, prüft aber nicht jede Zeile | Kalibrierquadrat und Kacheln haben Vorrang |
 | Kein Undo über Ansichtswechsel hinweg | Undo gilt für Projektschritte | so entschieden (60 Schritte) |
