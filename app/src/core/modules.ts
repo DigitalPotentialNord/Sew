@@ -148,7 +148,7 @@ const M01: ModuleDef = {
       { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-top', values: { saum: sb } },
       { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-pocket', values: { hoehe: h } },
       { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { hoehe: h } },
-      { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-sides', values: { hoehe: h } },
+      { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-sides', values: {} },
     ];
   },
   validate: (p, ctx, id) => {
@@ -258,8 +258,9 @@ const M02: ModuleDef = {
     const sections = Math.max(1, num(p, 'sections', 3));
     return [
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-teilung', values: { sections } },
-      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-bottom', values: { hoehe: num(p, 'hoehe', 80) } },
-      { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { sections } },
+      // Der 10-mm-Umschlag unten (fach-geteilt: h + 10 + 2·nz) — nicht die Fachhöhe.
+      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-bottom', values: { umschlag: 10 } },
+      { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-pocket', values: { hoehe: Math.round(num(p, 'hoehe', 80)) } },
     ];
   },
   validate: (p, ctx, id) => {
@@ -376,7 +377,7 @@ const M03: ModuleDef = {
   operations: (p, _ctx, id) => {
     const w = num(p, 'breite', 160);
     return [
-      { kind: 'install-zip', moduleId: id, dependsOn: [], titleKey: 'op.install-zip', values: { laenge: Math.round(w) } },
+      { kind: 'install-zip', moduleId: id, dependsOn: [], titleKey: 'op.install-zip', values: { laenge: Math.round(w + 20) } },
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-zip-bag', values: { breite: Math.round(w) } },
       { kind: 'topstitch', moduleId: id, dependsOn: [], titleKey: 'op.topstitch-zip', values: { laenge: Math.round(w) }, phase: 'sew-order' },
     ];
@@ -497,7 +498,7 @@ const M04: ModuleDef = {
     const loops = Math.max(1, num(p, 'loops', 6));
     return [
       { kind: 'mark', moduleId: id, dependsOn: [], titleKey: 'op.mark-loops', values: { loops } },
-      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-elastik-trage', values: { loops } },
+      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-elastik-trage', values: { enden: 2 } },
       { kind: 'thread-elastic', moduleId: id, dependsOn: [], titleKey: 'op.thread-elastic', values: { loops, laenge: Math.round(loops * loopLength(p)) } },
     ];
   },
@@ -712,7 +713,16 @@ const M06: ModuleDef = {
       { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-channel', values: { hoehe: Math.round(h) } },
       { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-top', values: { saum: 10 } },
       { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-channel', values: { hoehe: Math.round(h) } },
-      { kind: 'stitch-divider', moduleId: id, dependsOn: [], titleKey: 'op.stitch-dividers', values: { naehte: anzahl - 1, hoehe: Math.round(h) } },
+      // Trennnähte nur, wenn es tatsächlich mehrere Paare gibt — bei paare = 1 gibt es keine.
+      ...(anzahl > 1
+        ? [{
+            kind: 'stitch-divider' as const,
+            moduleId: id,
+            dependsOn: [],
+            titleKey: anzahl - 1 === 1 ? 'op.stitch-divider-one' : 'op.stitch-dividers',
+            values: { naehte: anzahl - 1, hoehe: Math.round(h) },
+          }]
+        : []),
     ];
   },
   validate: (p, ctx, id) => {
@@ -924,7 +934,7 @@ const M08: ModuleDef = {
   ],
   operations: (p, _ctx, id) => [
     { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.make-button-tab', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
-    { kind: 'insert-strap', moduleId: id, dependsOn: [], titleKey: 'op.attach-strap', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
+    { kind: 'insert-strap', moduleId: id, dependsOn: [], titleKey: 'op.attach-button-tab', values: { laenge: Math.round(num(p, 'laschenLaenge', 90)) } },
     { kind: 'attach-button', moduleId: id, dependsOn: [], titleKey: 'op.attach-button', values: { durchmesser: Math.round(num(p, 'knopfDurchmesser', 18)) } },
   ],
   validate: (p, _ctx, id) => {
@@ -1275,8 +1285,10 @@ const M12: ModuleDef = {
   },
   operations: (p, _ctx, id) => {
     const sections = Math.max(1, num(p, 'sections', 2));
+    const w = num(p, 'breite', 90);
     return [
-      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-beleg', values: { sections } },
+      // EIN Belegstreifen (w × 20 mm, quer zugeschnitten) — kein Fächer-Bezug.
+      { kind: 'press', moduleId: id, dependsOn: [], titleKey: 'op.press-beleg', values: { breite: Math.round(w) } },
       { kind: 'stitch', moduleId: id, dependsOn: [], titleKey: 'op.stitch-teilung', values: { sections } },
       { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-deep-pocket', values: { hoehe: Math.round(num(p, 'hoehe', 120)) } },
     ];
@@ -1578,7 +1590,7 @@ const M16: ModuleDef = {
     ];
   },
   operations: (p, _ctx, id) => [
-    { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-scissors', values: { laenge: Math.round(num(p, 'laenge', 180)) } },
+    { kind: 'fuse', moduleId: id, dependsOn: [], titleKey: 'op.fuse-scissors', values: { hoehe: Math.round(num(p, 'laenge', 180) * 0.5) } },
     { kind: 'baste', moduleId: id, dependsOn: [], titleKey: 'op.baste-deep-pocket', values: { hoehe: Math.round(num(p, 'laenge', 180)) } },
   ],
   validate: (p, ctx, id) => {

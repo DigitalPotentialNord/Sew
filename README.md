@@ -54,7 +54,7 @@ Browser; Projekte liegen im `localStorage`, Exporte sind Dateien.
 | `npm run build` | Typen prüfen + Produktionsbuild nach `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint 9 (flat config) |
-| `npm test` | 333 Unit-Tests (Vitest, `src/_tests/`) |
+| `npm test` | 347 Unit-Tests (Vitest, `src/_tests/`) |
 | `npm run e2e` | 30 Abnahmetests (Playwright, `tests/`) |
 | `npm run check` | typecheck + lint + test — **vor jedem Commit** |
 
@@ -92,7 +92,7 @@ app/
 
 **Die eine Regel, die den ganzen Aufbau erklärt:** `src/core/` kennt weder React
 noch `localStorage` noch `Date.now()`. Der Kern ist eine Funktion
-`Project → Construction`. Deshalb ist er in Node testbar (333 Tests laufen in
+`Project → Construction`. Deshalb ist er in Node testbar (347 Tests laufen in
 ~2 s), deterministisch und für ein zweites Frontend wiederverwendbar.
 
 ---

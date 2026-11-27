@@ -693,7 +693,9 @@ describe('Stoffbreite & Skalierungsstress (V-G-12 & 60 Module)', () => {
     expect(f!.fix?.kind).toBe('setFabricWidth');
   });
 
-  it('60 Module (ca. 245 Operationen) bleiben azyklisch und konstruieren schnell', () => {
+  it('60 Module (≥ 150 Operationen) bleiben azyklisch und konstruieren schnell', () => {
+    // Schwelle an die korrekte Operationsmenge angepasst: seit #16 emittiert M06
+    // „stitch-divider“ nur noch bei paare > 1 (bei 1 Paar gibt es keine Trennnaht).
     const tpl = buildTemplate('strick');
     const mods: Instance[] = Array.from({ length: 60 }, (_, i) => ({
       ...tpl.modules[i % tpl.modules.length]!,
@@ -702,7 +704,7 @@ describe('Stoffbreite & Skalierungsstress (V-G-12 & 60 Module)', () => {
     const t0 = performance.now();
     const c = construct({ ...tpl, modules: mods });
     const dt = performance.now() - t0;
-    expect(c.operations.length).toBeGreaterThan(200);
+    expect(c.operations.length).toBeGreaterThan(150);
     expect(dt).toBeLessThan(500);
     const pos = new Map(c.operations.map((o, i) => [o.id, i]));
     for (const op of c.operations) {
