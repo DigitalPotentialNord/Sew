@@ -98,22 +98,23 @@ jobs:
                 for (const t of (sp.tests||[])) {
                   const attempts = t.results||[];
                   const last = attempts[attempts.length-1];
-                  if (last && last.status === 'failed') {
-                    all.push({title: sp.title, file: s.file||sp.file||'', err: (last.error&&(last.error.message||last.error.value))||''});
+                  if (last && ['failed','timedOut','interrupted'].includes(last.status)) {
+                    all.push({title: sp.title, file: s.file||sp.file||'', err: (last.error&&(last.error.message||last.error.value||JSON.stringify(last.error)))||last.status});
                   }
                 }
               }
               for (const sub of (s.suites||[])) dig(sub);
             }
-            r.suites.forEach(dig);
+            (r.suites||[]).forEach(dig);
             const stats = r.stats||{};
-            console.log('::notice::PW_STATS total=' + (stats.total||0) + ' passed=' + (stats.passed||0) + ' failed=' + (stats.failed||0) + ' flaky=' + (stats.flaky||0) + ' unexpected=' + (stats.unexpected||0));
+            const total = stats.tests || stats.total || 0;
+            console.log('::notice::PW_STATS total=' + total + ' expected=' + (stats.expected||0) + ' unexpected=' + (stats.unexpected||0) + ' flaky=' + (stats.flaky||0) + ' skipped=' + (stats.skipped||0));
             for (const f of all) {
               const msg = 'PWFAIL: ' + f.title + ' | ' + String(f.err).slice(0,300);
               console.log('::error file=' + (f.file||'playwright') + '::' + msg.replace(/\\n/g,' '));
             }
-            if (all.length === 0 && stats.failed > 0) {
-              console.log('::error::PWFAIL: ' + stats.failed + ' tests failed but no details could be extracted. Check artifacts.');
+            if (all.length === 0 && (stats.unexpected||0) > 0) {
+              console.log('::error::PWFAIL: ' + (stats.unexpected||0) + ' tests failed but no details could be extracted from JSON. suites=' + (r.suites||[]).length);
             }
             "
           else
