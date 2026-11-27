@@ -408,17 +408,17 @@ test.describe('9 — PDF-Datei und Drehung', () => {
   test('gedrehtes Modul bleibt im Raster und erzeugt keinen falschen Fehler', async ({ page }) => {
     await loadSchmuck(page);
     const mod = page.locator('.canvas-svg g.mod').last();
-    const before = await mod.boundingBox();
+    const shape = mod.locator('rect.mod-shape');
+    const wBefore = await shape.getAttribute('width');
     // Auf .mod-shape klicken (nicht auf <g>), damit der Pointer-Event das
     // Modul sicher trifft — das <g>-Zentrum kann neben der Rect liegen.
-    await mod.locator('rect.mod-shape').click({ force: true });
+    await shape.click({ force: true });
     await page.keyboard.press('r');
+    // Bei 90°-Rotation tauschen drawW/drawH — das width-Attribut der
+    // mod-shape-Rect ändert sich (m.rect.w → m.rect.h).
     await expect
-      .poll(async () => {
-        const b = await page.locator('.canvas-svg g.mod').last().boundingBox();
-        return b ? Math.round(b.width) : 0;
-      })
-      .not.toBe(Math.round(before!.width));
+      .poll(async () => page.locator('.canvas-svg g.mod').last().locator('rect.mod-shape').getAttribute('width'))
+      .not.toBe(wBefore);
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
   });
 

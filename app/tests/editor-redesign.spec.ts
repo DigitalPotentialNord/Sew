@@ -158,7 +158,7 @@ test.describe('Kerninteraktionen (Walkthrough)', () => {
     await expect(page.locator('.canvas-svg .dim-line')).toHaveCount(0);
     await page.locator('.mode-toggle').getByRole('button', { name: /Erweitert/ }).click();
     // Erweiterter Modus: Maßketten und Außenkontur werden sichtbar.
-    await expect(page.locator('.canvas-svg .dim-line').first()).toBeVisible();
+    await expect(page.locator('.canvas-svg .dim-group').first()).toBeVisible();
     await expect(page.locator('.canvas-svg .flap-outline')).toHaveCount(1);
   });
 });

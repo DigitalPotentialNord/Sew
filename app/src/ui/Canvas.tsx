@@ -660,7 +660,7 @@ export function Canvas(): JSX.Element {
 
             {/* Bemaßung — nur im Expertenmodus */}
             {showDims ? (
-              <g>
+              <g className="dim-group">
                 <line x1={0} y1={-14} x2={c.book.w} y2={-14} className="dim-line" />
                 <line x1={0} y1={-17} x2={0} y2={-11} className="dim-tick" />
                 <line x1={c.book.w} y1={-17} x2={c.book.w} y2={-11} className="dim-tick" />
@@ -740,7 +740,7 @@ function ContextBar({
   const top = anchor.y * scale + panY - 8;
   const clampedLeft = Math.max(8, Math.min(wrapWidth - 280, left - 140));
   return (
-    <div className="ctx-bar" style={{ left: clampedLeft, top: top < 8 ? anchor.y * scale + anchor.h * scale + panY + 8 : top }} aria-label={t('canvas.select')}>
+    <div className="ctx-bar" style={{ left: clampedLeft, top: top < 8 ? anchor.y * scale + anchor.h * scale + panY + 8 : top }} aria-label={t('canvas.select')} onPointerDown={(e) => e.stopPropagation()}>
       <span className="ctx-label">{side === 'left' ? t('side.left') : t('side.right')}</span>
       <span className="ctx-divider" />
       <Button size="sm" icon="rotate" onClick={onRotate} title={t('canvas.rotate')} ariaLabel={t('canvas.rotate')} />
