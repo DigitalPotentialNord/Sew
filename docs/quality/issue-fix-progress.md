@@ -38,9 +38,11 @@ die Issues bleiben offen, bis der Nutzer nach dem Merge/Deploy entscheidet.
 
 ## Bekannte Abnahme-Lücken (ehrlich)
 
-1. **Kein Playwright-E2E lokal ausführbar** — Browser-Download blockiert (`cdn.playwright.dev`
-   nicht erreichbar aus dieser Sandbox). `playwright test` (51 Tests in 2 Dateien) muss in CI
-   laufen; die Fixes berühren Kerninteraktionen (Starter, Canvas, Sheets).
+1. ~~**Kein Playwright-E2E lokal ausführbar**~~ — Browser-Download blockiert lokal, dafür
+   läuft die Suite in CI („Abnahmetests“). Erster Lauf des PR #23: 3 Alt-Tests rot gegen die
+   neuen, korrekten Zustände (Fehleranzahl 5 → 8 durch #18-Höhenvalidierung; `.finding.error`
+   2 → 4 durch #18; Feldlabels „Höhe“/„Breite“ tauschen bei 90° durch #12). Test-Erwartungen
+   angepasst (Commit folgt) — keine Logikänderung.
 2. **Visuelle Prüfung fehlt** — insbesondere #12 (Falz-Beschriftung, Überstand-Markierung,
    Kontextleisten-Platzierung) und #19 (Starter bei 796×734). Screenshots unter `docs-shots/`
    sind auf dem Stand vor diesen Fixes.

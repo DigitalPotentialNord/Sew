@@ -203,16 +203,19 @@ test.describe('4 — Regelwerk und Warnungen', () => {
     const width = page.getByRole('spinbutton', { name: 'Breite', exact: true });
     await width.fill('280');
     await width.blur();
-    // Fehleranzeige in der Tabbar und in der Warnungsleiste
-    await expect(page.locator('.tabbar')).toContainText('5');
+    // Fehleranzeige in der Tabbar (Badge) und in der Warnungsleiste.
+    // Durch die Höhenvalidierung (#18) kommen zu den Platzfehlern die
+    // zugehörigen Höhenfehler (V-M02-03/V-M03-04/V-M11-03) und V-G-13 hinzu: 8.
+    await expect(page.locator('.tabbar')).toContainText('8');
     await expect(page.locator('.pane.right')).toContainText(/Fehler/);
     await expect(page.locator('.pane.right')).toContainText(/Export gesperrt/);
 
-    // Der PDF-Knopf blockiert ehrlich und führt zur Fehleransicht
-    await page.locator('.topbar .btn-split > button').first().click();
-    await expect(page.locator('.toast.error')).toContainText(/gesperrt/);
-    await expect(page.locator('.toast.error')).toContainText(/5 Fehler/);
-    await expect(page.getByRole('tab', { name: /Schnittmuster/ })).toHaveAttribute('aria-selected', 'true');
+    // Die Exportknöpfe sind bei Fehlern gesperrt (aria-/disabled + Sperrtitel),
+    // nicht bloß wirkungslos — siehe #22.
+    const printBtn = page.locator('.topbar .btn-split > button').first();
+    await expect(printBtn).toBeDisabled();
+    await expect(printBtn).toHaveAttribute('title', /8 Fehler/);
+    await expect(page.locator('.topbar .btn-split > button').nth(1)).toBeDisabled();
   });
 
   test('ein Fix repariert den Zustand wirklich', async ({ page }) => {
@@ -433,7 +436,9 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await page.locator('.canvas-svg g.mod').first().click({ force: true });
     await page.keyboard.press('r');
     await page.getByRole('button', { name: /Warnungen/i }).first().click();
-    await expect(page.locator('.pane.right .finding.error')).toHaveCount(2);
+    // V-G-13 (Gesamtüberlauf) + V-M03-04/V-M09-01/V-M11-03 (Höhen-/Platzfehler
+    // nach der Drehung, neu durch #18) = 4.
+    await expect(page.locator('.pane.right .finding.error')).toHaveCount(4);
     await page.locator('.pane.right .finding.error button').first().click();
     await expect(page.locator('.pane.right .finding.error')).toHaveCount(0);
   });
@@ -448,7 +453,6 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     // Eigenschaften sind sofort sichtbar.
 
     const wInput = page.getByRole('spinbutton', { name: 'Breite', exact: true });
-    const hInput = page.getByRole('spinbutton', { name: 'Höhe', exact: true });
     // Skaliergriffe sind sichtbar (Modul ist selektiert)
     await expect(page.locator('.scale-handle').first()).toBeVisible();
 
@@ -458,10 +462,11 @@ test.describe('9 — PDF-Datei und Drehung', () => {
     await wInput.blur();
     expect(Number(await wInput.inputValue())).toBeGreaterThan(70);
 
-    // Nach 90°-Drehung sind die Achsen getauscht: ein Breiten-Parameter
-    // wird zur Höhe und umgekehrt. Die Änderung darf sich nicht
-    // multiplizieren (PR#9-Regressionsschutz).
+    // Nach 90°-Drehung sind die Achsen getauscht — inklusive der Feldlabels:
+    // das Parametrierfeld »hoehe« heißt nun »Breite (90°)« (#12). Die Änderung
+    // darf sich nicht multiplizieren (PR#9-Regressionsschutz).
     await page.keyboard.press('r');
+    const hInput = page.getByRole('spinbutton', { name: 'Breite (90°)', exact: true });
     const hBefore = Number(await hInput.inputValue());
     await hInput.fill(String(hBefore + 20));
     await hInput.blur();
