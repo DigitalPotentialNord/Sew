@@ -85,6 +85,35 @@ jobs:
       - name: Abnahmetests ausführen
         run: npx playwright test
 
+      - name: Fehlgeschlagene Tests als Annotationen melden
+        if: always()
+        working-directory: app
+        run: |
+          if [ -f test-results/results.json ]; then
+            node -e "
+            const r = require('./test-results/results.json');
+            const all = [];
+            function dig(s){
+              for (const sp of s.specs) {
+                for (const t of sp.tests) {
+                  const attempts = t.results;
+                  const last = attempts[attempts.length-1];
+                  if (last.status === 'failed') {
+                    all.push({title: sp.title, file: s.file||sp.file||'', err: (last.error&&last.error.message)||''});
+                  }
+                }
+              }
+              for (const sub of (s.suites||[])) dig(sub);
+            }
+            r.suites.forEach(dig);
+            console.log('PW_STATS total=' + r.stats.total + ' passed=' + r.stats.passed + ' failed=' + r.stats.failed + ' flaky=' + r.stats.flaky);
+            for (const f of all) {
+              const msg = 'PWFAIL: ' + f.title + ' | ' + f.err.slice(0,300);
+              console.log('::error file=' + (f.file||'playwright') + '::' + msg.replace(/\\n/g,' '));
+            }
+            "
+          fi
+
       - name: Test-Ergebnisse hochladen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (Pinned)
         if: always()
