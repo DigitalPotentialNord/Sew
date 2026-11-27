@@ -23,6 +23,7 @@ async function dismissStarterIfPresent(page: Page): Promise<void> {
 
 async function loadSchmuck(page: Page): Promise<void> {
   await page.goto('/');
+  await expect(page.locator('.topbar')).toBeVisible();
   await dismissStarterIfPresent(page);
   await tab(page, 'Projekt').click();
   await page.getByRole('button', { name: /Schmuck-Organizer/ }).first().click();
@@ -62,6 +63,7 @@ test.describe('1 — Start und Vorlage', () => {
   test('jede Vorlage rendert ohne Fehler-Findings', async ({ page }) => {
     for (const name of ['Schmuck-Organizer', 'Make-up-Organizer', 'Stricknadel-Organizer']) {
       await page.goto('/');
+      await expect(page.locator('.topbar')).toBeVisible();
       await dismissStarterIfPresent(page);
       await tab(page, 'Projekt').click();
       await page.getByRole('button', { name: new RegExp(name) }).first().click();

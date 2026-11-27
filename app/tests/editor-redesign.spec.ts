@@ -47,6 +47,7 @@ test.describe('Starter-Erfahrung', () => {
 test.describe('Kerninteraktionen (Walkthrough)', () => {
   async function openSchmuck(page: Page): Promise<void> {
     await page.goto('/');
+    await expect(page.locator('.topbar')).toBeVisible();
     const start = page.locator('.start-overlay');
     if (await start.count() > 0) {
       await start.getByRole('button', { name: /Schmuck-Organizer/ }).first().click();
