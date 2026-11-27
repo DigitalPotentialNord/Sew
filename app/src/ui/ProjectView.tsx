@@ -195,7 +195,7 @@ export function ProjectView(): JSX.Element {
                 </div>
                 <div className="stat">
                   <div className="stat-label">{t('proj.statsArea')}</div>
-                  <div className="stat-value">{(c.metrics.fabricAreaM2 * 100).toFixed(1)}</div>
+                  <div className="stat-value">{(c.metrics.fabricAreaM2 * 100).toFixed(1).replace('.', ',')}</div>
                   <div className="stat-sub">dm²</div>
                 </div>
                 <div className="stat">
@@ -282,7 +282,7 @@ export function ProjectView(): JSX.Element {
                             </Button>
                           </>
                         ) : (
-                          <Button size="sm" variant="danger" icon="trash" onClick={() => setConfirmId(s.id)} />
+                          <Button size="sm" variant="danger" icon="trash" onClick={() => setConfirmId(s.id)} ariaLabel={t('proj.confirmDelete')} title={t('proj.confirmDelete')} />
                         )}
                       </td>
                     </tr>

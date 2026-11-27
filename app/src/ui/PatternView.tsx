@@ -26,7 +26,7 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
           <div>
             <h2 className="doc-title">{t('pattern.title')}</h2>
             <p className="doc-sub">
-              {t('pattern.pieces', { n: cut.length })} · {t('pattern.pages', { n: totalPages(c) })}
+              {t(cut.length === 1 ? 'pattern.piece' : 'pattern.pieces', { n: cut.length })} · {t('pattern.pages', { n: totalPages(c) })}
             </p>
           </div>
           <div className="doc-actions">
@@ -57,7 +57,7 @@ export function PatternView({ onPrint, onPrintInstructions }: { onPrint: () => v
             style={{ borderColor: 'var(--ok)', background: 'var(--ok-soft)', padding: '8px 14px', display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}
           >
             <Icon name="check" size={14} />
-            {t('pattern.ready')} · {c.metrics.cutPieceCount} Schnittteile · {Math.round(c.metrics.seamLengthMm / 10) / 100} m Naht
+            {t('pattern.ready')} · {t(c.metrics.cutPieceCount === 1 ? 'pattern.piece' : 'pattern.pieces', { n: c.metrics.cutPieceCount })} · {(c.metrics.seamLengthMm / 1000).toFixed(1).replace('.', ',')} m Naht
           </div>
         )}
 

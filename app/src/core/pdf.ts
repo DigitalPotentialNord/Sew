@@ -97,6 +97,8 @@ export interface PdfStrings {
   readonly cutList: readonly { label: string; size: string; count: string; tiles: string }[];
   readonly instructions: readonly { index: number; phase: string; text: string }[];
   readonly footer: string;
+  /** Zählwort für „{n} Teil(e)“ auf dem Deckblatt — Pluralwahl trifft der Aufrufer. */
+  readonly piece: string;
 }
 
 /** Ein Blatt Papier im PDF-Koordinatensystem (Ursprung unten links). */
@@ -192,7 +194,7 @@ export async function buildPdf(c: Construction, s: PdfStrings): Promise<BuiltPdf
     // Kopfzahlen
     const stats = [
       `${c.flap.w} × ${c.flap.h} mm`,
-      `${cut.length} Teile`,
+      `${cut.length} ${s.piece}`,
       `${c.materials.length} Materialzeilen`,
     ];
     p.page.drawText(safe(stats.join('   ·   ')), { x: p.left, y, size: 9, color: INK });

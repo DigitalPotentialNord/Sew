@@ -22,11 +22,12 @@ export function Warnings(): JSX.Element {
         <span className="pane-title">{t('warn.title')}</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-3)' }}>
           {visible.filter((f) => f.severity === 'error').length} {t('warn.error')} ·{' '}
-          {visible.filter((f) => f.severity === 'warn').length} {t('warn.warn')}
+          {(() => {
+            const n = visible.filter((f) => f.severity === 'warn').length;
+            return `${n} ${n === 1 ? t('warn.warn') : t('warn.warnMany')}`;
+          })()}
         </span>
-        <span className="mobile-only">
-          <Button icon="close" size="sm" onClick={() => setWarnOpen(false)} title={t('mobile.close')} />
-        </span>
+
       </div>
       <div className="pane-body">
         {visible.length === 0 ? (
@@ -38,27 +39,27 @@ export function Warnings(): JSX.Element {
         ) : (
           visible.map((f) => {
             const key = findingKey(f);
+            const moduleId = f.subject.kind === 'module' ? f.subject.id : null;
             return (
-              <div
-                key={key}
-                className={`finding ${f.severity}`}
-                onClick={() => {
-                  if (f.subject.kind === 'module') {
-                    select([f.subject.id]);
-                    setWarnOpen(false);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && f.subject.kind === 'module') select([f.subject.id]);
-                }}
-              >
+              <div key={key} className={`finding ${f.severity}`}>
                 <span className={`dot ${f.severity}`} />
                 <div>
                   <div className="finding-title">{t(`rule.${f.ruleId}.title`)}</div>
                   <div className="finding-detail">{t(`rule.${f.ruleId}.detail`, f.values)}</div>
                   <div className="finding-actions">
+                    {moduleId ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          select([moduleId]);
+                          setWarnOpen(false);
+                        }}
+                        title={t('canvas.select')}
+                      >
+                        {t('canvas.select')}
+                      </Button>
+                    ) : null}
                     {f.fix ? (
                       <Button
                         size="sm"

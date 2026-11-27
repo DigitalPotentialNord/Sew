@@ -13,7 +13,7 @@ ohne UI-Abhängigkeiten, deutsche Oberfläche, Export.
 
 | Bereich | Stand | Nachweis |
 | --- | --- | --- |
-| Konstruktionskern (`src/core/`) | fertig | 347 Unit-Tests |
+| Konstruktionskern (`src/core/`) | fertig | 359 Unit-Tests |
 | Regelwerk V-G/V-M | 15 Regeln, V-G-11 fehlt | Tests + Vorlagen mit 0 Fehlern |
 | Praxiswerte | v1.2.0, zentral in `practice.ts` | `LIMITS`, `PRACTICE` |
 | Drei Vorlagen | Schmuck / Make-up / Stricknadel, je 0 Fehler / 0 Hinweise | `npx vite-node`-Sonde je Vorlage |
@@ -31,7 +31,7 @@ ohne UI-Abhängigkeiten, deutsche Oberfläche, Export.
 ```
 npx tsc --noEmit        → 0 Fehler
 npx eslint src          → 0 Fehler
-npx vitest run          → 347 Tests, 16 Dateien
+npx vitest run          → 359 Tests, 17 Dateien
 npx playwright test     → 30 Tests
 npm run build           → OK, Editor-Chunk 388 kB (gzip 111 kB), PDF-Chunk separat
 ```
@@ -163,7 +163,7 @@ app/src/core/     geometry · construction · modules · practice · fixes · ex
 app/src/state/    store.ts (Zustand, Undo 60, Hash-Guard)
 app/src/ui/       App · Canvas · Properties · Warnings · Library · 5 Ansichten · styles.css
 app/src/i18n/     de.ts (alle sichtbaren Strings)
-app/src/_tests/   16 Dateien, 347 Tests
+app/src/_tests/   17 Dateien, 359 Tests
 app/tests/        acceptance.spec.ts, 30 Tests
 app/docs-shots/   13 Screenshots des laufenden Editors
 ```

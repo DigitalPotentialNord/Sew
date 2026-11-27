@@ -734,10 +734,10 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       unit: 'm2',
       meters: plan.meters,
       certainty: 'estimated',
-      basisKey: 'basis.flaeche',
+      basisKey: relevant.reduce((a, pc) => a + pc.count, 0) === 1 ? 'basis.flaecheOne' : 'basis.flaeche',
       basisValues: {
         teile: relevant.reduce((a, pc) => a + pc.count, 0),
-        flaeche: Math.round(areaMm2 / 100) / 10,
+        flaeche: (Math.round(areaMm2 / 100) / 10).toFixed(1).replace('.', ','),
         breite: planWidth,
         verschnitt: plan.wastePct,
       },
@@ -852,7 +852,7 @@ function buildMaterials(p: Project, pieces: readonly ComputedPiece[]): { materia
       unit: 'mm',
       certainty: 'estimated',
       basisKey: 'basis.garn',
-      basisValues: { naht: Math.round(seamLength), faktor: PRACTICE.threadDensityFactor },
+      basisValues: { naht: Math.round(seamLength), faktor: String(PRACTICE.threadDensityFactor).replace('.', ',') },
       sources: [],
     });
   }
@@ -968,7 +968,7 @@ function buildOperations(p: Project, pieces: readonly ComputedPiece[]): SewingOp
     const n = nodes.find((x) => x.id === o.id);
     n?.deps.add(turnId);
   }
-  push({ id: 'op-final', kind: 'final-check', titleKey: 'op.final-check', values: { teile: pieces.filter((x) => x.kind === 'cut').length }, deps: ['op-topstitch'], seq: seq++ });
+  push({ id: 'op-final', kind: 'final-check', titleKey: 'op.final-check', values: {}, deps: ['op-topstitch'], seq: seq++ });
 
   // Kahn mit totalem Schlüssel
   const byId = new Map(nodes.map((n) => [n.id, n]));

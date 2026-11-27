@@ -62,6 +62,7 @@ describe('buildPdf', () => {
     cutList: c.pieces.map((p) => ({ label: p.id, size: `${p.w} x ${p.h} mm`, count: `${p.count}x`, tiles: '1' })),
     instructions: c.operations.map((o) => ({ index: o.index, phase: o.phase, text: 'Test' })),
     footer: 'Fusszeile',
+    piece: 'Teile',
   };
 
   it('erzeugt ein gültiges PDF mit Deckblatt, Listen und Kacheln', async () => {
@@ -127,6 +128,7 @@ describe('2D Liang–Barsky & mehrseitige Anleitung (Regressions)', () => {
         .map((p) => ({ label: p.id, size: `${p.w} x ${p.h}`, count: `${p.count}x`, tiles: '1' })),
       instructions: c.operations.map((o) => ({ index: o.index, phase: o.phase, text: `Schritt ${o.index}: ${o.titleKey}` })),
       footer: 'Footer',
+      piece: 'Teile',
     });
     const { tilePiece } = await import('../core/export');
     const tileCount = c.pieces.filter((p) => p.kind === 'cut').reduce((n, p) => n + tilePiece(p).length, 0);

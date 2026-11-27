@@ -161,7 +161,7 @@ function Topbar({ view, errors, warns, saved }: { view: View; setView: (v: View)
         <Button icon="save" onClick={save} title={t('top.save')} />
         <Button icon="upload" onClick={() => fileRef.current?.click()} title={t('top.import')} />
         <Button icon="download" onClick={() => { const data = useStore.getState().exportProject(); downloadText(fileName(project.name, 'projekt', 'json'), 'application/json', JSON.stringify(data, null, 2)); toast(t('toast.exported'), 'ok'); }} title={t('top.exportProject')} />
-        <Button icon="image" onClick={() => { downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(useStore.getState().construction)); toast(t('toast.svgSaved'), 'ok'); }} disabled={errors > 0} title={t('top.exportSvg')} />
+        <Button icon="image" onClick={() => { downloadText(fileName(project.name, 'schnittmuster', 'svg'), 'image/svg+xml', toSvg(useStore.getState().construction)); toast(t('toast.svgSaved'), 'ok'); }} disabled={errors > 0} title={errors > 0 ? t('pattern.blocked', { n: errors }) : t('top.exportSvg')} />
         <input
           ref={fileRef}
           type="file"
@@ -245,6 +245,7 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
           phase: t(`phase.${op.phase}`),
           text: t(op.titleKey, op.values),
         })),
+        piece: c.pieces.filter((pc) => pc.kind === 'cut').length === 1 ? t('print.piece') : t('print.pieces'),
         footer: `${t('app.name')} · ${project.name} · Praxiswerte ${c.practiceVersion} · Konstruktion ${c.projectHash}`,
       };
       const { buildPdf } = await import('../core/pdf');
@@ -260,7 +261,7 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
 
   return (
     <div className="btn-split">
-      <Button variant="accent" icon="printer" onClick={doPrint} title={errors > 0 ? t('pattern.blocked', { n: errors }) : t('top.exportPdf')}>
+      <Button variant="accent" icon="printer" onClick={doPrint} disabled={errors > 0} title={errors > 0 ? t('pattern.blocked', { n: errors }) : t('top.exportPdf')}>
         <span className="desktop-only">{t('top.exportPdf')}</span>
         <span className="mobile-only">PDF</span>
       </Button>
@@ -268,8 +269,8 @@ function PrintButton({ errors }: { errors: number }): JSX.Element {
         variant="accent"
         icon="download"
         onClick={() => void doDownloadPdf()}
-        disabled={busy}
-        title={t('top.downloadPdf')}
+        disabled={errors > 0 || busy}
+        title={errors > 0 ? t('pattern.blocked', { n: errors }) : t('top.downloadPdf')}
         aria-label={t('top.downloadPdf')}
       />
     </div>
@@ -450,11 +451,11 @@ function Statusbar(): JSX.Element {
     <footer className="statusbar">
       <span className={`status-dot ${errors > 0 ? 'error' : warns > 0 ? 'warn' : ''}`} />
       <span>
-        {errors > 0 ? <strong>{t('warn.errors', { n: errors })}</strong> : warns > 0 ? <strong>{t('warn.warns', { n: warns })}</strong> : <strong>{t('warn.none')}</strong>}
+        {errors > 0 ? <strong>{t('warn.errors', { n: errors })}</strong> : warns > 0 ? <strong>{t(warns === 1 ? 'warn.warnsOne' : 'warn.warns', { n: warns })}</strong> : <strong>{t('warn.none')}</strong>}
       </span>
       <span className="status-sep">·</span>
       <span>
-        {c.metrics.moduleCount} Module · {c.metrics.cutPieceCount} Teile
+        {c.metrics.moduleCount} Module · {t(c.metrics.cutPieceCount === 1 ? 'pattern.piece' : 'pattern.pieces', { n: c.metrics.cutPieceCount })}
       </span>
       <span className="status-sep">·</span>
       <span>
@@ -490,8 +491,8 @@ function openPrintWindow(mode: 'full' | 'instructions'): void {
     calibrationLabel: t('pattern.calibration'),
     calibrationHint: t('pattern.calibrationHint'),
     seamAllowance: 'Nahtzugabe',
-    piece: 'Teile',
-    count: 'Teile',
+    piece: c.pieces.filter((pc) => pc.kind === 'cut').length === 1 ? t('print.piece') : t('print.pieces'),
+    count: c.pieces.filter((pc) => pc.kind === 'cut').length === 1 ? t('print.piece') : t('print.pieces'),
     size: 'Maße',
     grain: 'Fadenlauf',
     glue: 'kleben',
